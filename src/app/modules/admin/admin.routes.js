@@ -14,12 +14,16 @@ import { protect } from '../../middlewares/auth.middleware.js';
 import { roleCheck } from '../../middlewares/roleCheck.middleware.js';
 import { body } from 'express-validator';
 import { validate } from '../../middlewares/validate.middleware.js';
+import verificationRoutes from './verification.routes.js';
 
 const router = express.Router();
 
 // All routes require authentication and admin role
 router.use(protect);
 router.use(roleCheck(['admin']));
+
+// Verification management routes
+router.use('/verifications', verificationRoutes);
 
 // Validation rules
 const broadcastValidation = [

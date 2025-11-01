@@ -1,6 +1,8 @@
 import User from './auth.model.js';
 import jwt from 'jsonwebtoken';
 import { config } from '../../../config/config.js';
+import { uploadToCloudinary, deleteFromCloudinary } from '../../../config/cloudinary.js';
+import fs from 'fs';
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -56,6 +58,10 @@ export const register = async (req, res) => {
           role: user.role,
           location: user.location,
           isVerified: user.isVerified,
+          verificationStatus: user.verificationStatus || 'pending',
+          verificationDocuments: user.verificationDocuments || [],
+          isActive: user.isActive,
+          createdAt: user.createdAt,
           token: generateToken(user._id),
         },
       });
@@ -114,6 +120,10 @@ export const login = async (req, res) => {
         role: user.role,
         location: user.location,
         isVerified: user.isVerified,
+        verificationStatus: user.verificationStatus || 'pending',
+        verificationDocuments: user.verificationDocuments || [],
+        isActive: user.isActive,
+        createdAt: user.createdAt,
         token: generateToken(user._id),
       },
     });
@@ -142,6 +152,8 @@ export const getMe = async (req, res) => {
         role: user.role,
         location: user.location,
         isVerified: user.isVerified,
+        verificationStatus: user.verificationStatus || 'pending',
+        verificationDocuments: user.verificationDocuments || [],
         isActive: user.isActive,
         createdAt: user.createdAt,
       },
@@ -197,6 +209,225 @@ export const updateProfile = async (req, res) => {
         role: updatedUser.role,
         location: updatedUser.location,
         isVerified: updatedUser.isVerified,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Upload verification document
+// @route   POST /api/auth/upload-verification
+// @access  Private
+export const uploadVerificationDocument = async (req, res) => {
+  try {
+    const { documentType, documentNumber } = req.body;
+
+    if (!documentType || !documentNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'Document type and number are required',
+      });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload at least one document image',
+      });
+    }
+
+    // Validate file count based on document type
+    if (documentType === 'nid' && req.files.length !== 2) {
+      // Delete uploaded files
+      req.files.forEach((file) => {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      });
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload both front and back images of your NID (2 images required)',
+      });
+    }
+
+    if (documentType !== 'nid' && req.files.length > 1) {
+      // Delete uploaded files
+      req.files.forEach((file) => {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      });
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload only one image for this document type',
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      // Delete uploaded files if user not found
+      req.files.forEach((file) => {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      });
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    // Upload all files to Cloudinary
+    const uploadedUrls = [];
+    const uploadedPublicIds = [];
+
+    for (let i = 0; i < req.files.length; i++) {
+      const file = req.files[i];
+      const suffix = documentType === 'nid' ? (i === 0 ? '_front' : '_back') : '';
+
+      const cloudinaryResult = await uploadToCloudinary(
+        file.path,
+        'agroconnect',
+        user.role,
+        user._id.toString(),
+        documentType + suffix
+      );
+
+      uploadedUrls.push(cloudinaryResult.url);
+      uploadedPublicIds.push(cloudinaryResult.publicId);
+
+      // Delete local file after successful upload to Cloudinary
+      fs.unlinkSync(file.path);
+    }
+
+    // Add document to user's verification documents
+    user.verificationDocuments.push({
+      documentType,
+      documentNumber,
+      documentUrl: uploadedUrls.join('|||'), // Store multiple URLs separated by |||
+      cloudinaryPublicId: uploadedPublicIds.join('|||'), // Store multiple public IDs
+      cloudinaryResourceType: 'image',
+      uploadedAt: new Date(),
+    });
+
+    // Set verification status to pending if not already approved
+    if (user.verificationStatus !== 'approved') {
+      user.verificationStatus = 'pending';
+      user.rejectionReason = undefined; // Clear any previous rejection reason
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Verification document uploaded successfully',
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        location: user.location,
+        isVerified: user.isVerified,
+        verificationStatus: user.verificationStatus,
+        verificationDocuments: user.verificationDocuments,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    // Delete local files if error occurs
+    if (req.files && req.files.length > 0) {
+      req.files.forEach((file) => {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Delete verification document
+// @route   DELETE /api/auth/verification-document/:documentId
+// @access  Private
+export const deleteVerificationDocument = async (req, res) => {
+  try {
+    const { documentId } = req.params;
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    // Find the document
+    const documentIndex = user.verificationDocuments.findIndex(
+      (doc) => doc._id.toString() === documentId
+    );
+
+    if (documentIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found',
+      });
+    }
+
+    const document = user.verificationDocuments[documentIndex];
+
+    // Delete from Cloudinary
+    if (document.cloudinaryPublicId) {
+      const publicIds = document.cloudinaryPublicId.split('|||');
+      const resourceType = document.cloudinaryResourceType || 'image';
+
+      for (const publicId of publicIds) {
+        try {
+          await deleteFromCloudinary(publicId, resourceType);
+        } catch (error) {
+          console.error('Error deleting from Cloudinary:', error);
+          // Continue even if Cloudinary deletion fails
+        }
+      }
+    }
+
+    // Remove document from array
+    user.verificationDocuments.splice(documentIndex, 1);
+
+    // If no documents left, reset verification status to pending
+    if (user.verificationDocuments.length === 0) {
+      user.verificationStatus = 'pending';
+      user.isVerified = false;
+      user.rejectionReason = undefined;
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Document deleted successfully',
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        location: user.location,
+        isVerified: user.isVerified,
+        verificationStatus: user.verificationStatus,
+        verificationDocuments: user.verificationDocuments,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
       },
     });
   } catch (error) {

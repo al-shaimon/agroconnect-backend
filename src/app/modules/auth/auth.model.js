@@ -50,6 +50,31 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    verificationStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
+    },
+    verificationDocuments: [
+      {
+        documentType: {
+          type: String,
+          enum: ['nid', 'passport', 'driving_license', 'birth_certificate', 'trade_license'],
+        },
+        documentNumber: String,
+        documentUrl: String,
+        cloudinaryPublicId: String,
+        cloudinaryResourceType: String, // 'image' or 'raw' for PDFs
+        uploadedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    rejectionReason: {
+      type: String,
+      trim: true,
+    },
     isActive: {
       type: Boolean,
       default: true,

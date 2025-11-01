@@ -1,8 +1,16 @@
 import express from 'express';
-import { register, login, getMe, updateProfile } from './auth.controller.js';
+import {
+  register,
+  login,
+  getMe,
+  updateProfile,
+  uploadVerificationDocument,
+  deleteVerificationDocument,
+} from './auth.controller.js';
 import { protect } from '../../middlewares/auth.middleware.js';
 import { body } from 'express-validator';
 import { validate } from '../../middlewares/validate.middleware.js';
+import { upload } from '../../../config/multer.js';
 
 const router = express.Router();
 
@@ -30,5 +38,12 @@ router.post('/register', registerValidation, validate, register);
 router.post('/login', loginValidation, validate, login);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfileValidation, validate, updateProfile);
+router.post(
+  '/upload-verification',
+  protect,
+  upload.array('documents', 2),
+  uploadVerificationDocument
+);
+router.delete('/verification-document/:documentId', protect, deleteVerificationDocument);
 
 export default router;
