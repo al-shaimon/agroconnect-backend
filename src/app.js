@@ -6,6 +6,7 @@ import { dirname } from 'path';
 import { config } from './config/config.js';
 import routes from './app/routes.js';
 import { errorHandler, notFound } from './app/middlewares/error.middleware.js';
+import connectDB from './config/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -25,6 +26,20 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Middleware to ensure DB connection for serverless environments
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error('Database connection failed:', error);
+    res.status(503).json({
+      success: false,
+      message: 'Database connection unavailable',
+    });
+  }
+});
 
 // API Routes
 app.use('/api', routes);
