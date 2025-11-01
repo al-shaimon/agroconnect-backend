@@ -40,6 +40,10 @@ const productSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    cloudinaryPublicId: {
+      type: String,
+      trim: true,
+    },
     quality: {
       type: String,
       enum: ['Premium', 'Standard', 'Organic'],

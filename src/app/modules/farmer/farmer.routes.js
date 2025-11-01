@@ -8,11 +8,13 @@ import {
   getFarmerOrders,
   updateOrderStatus,
   getFarmerStats,
+  getRevenueAnalytics,
 } from './farmer.controller.js';
 import { protect } from '../../middlewares/auth.middleware.js';
 import { roleCheck } from '../../middlewares/roleCheck.middleware.js';
 import { body } from 'express-validator';
 import { validate } from '../../middlewares/validate.middleware.js';
+import { upload } from '../../../config/multer.js';
 
 const router = express.Router();
 
@@ -37,9 +39,16 @@ const orderStatusValidation = [
 ];
 
 // Product routes
-router.route('/products').post(productValidation, validate, createProduct).get(getMyProducts);
+router
+  .route('/products')
+  .post(upload.single('image'), productValidation, validate, createProduct)
+  .get(getMyProducts);
 
-router.route('/products/:id').get(getProductById).put(updateProduct).delete(deleteProduct);
+router
+  .route('/products/:id')
+  .get(getProductById)
+  .put(upload.single('image'), updateProduct)
+  .delete(deleteProduct);
 
 // Order routes
 router.get('/orders', getFarmerOrders);
@@ -47,5 +56,8 @@ router.put('/orders/:id/status', orderStatusValidation, validate, updateOrderSta
 
 // Stats route
 router.get('/stats', getFarmerStats);
+
+// Analytics route
+router.get('/analytics/revenue', getRevenueAnalytics);
 
 export default router;

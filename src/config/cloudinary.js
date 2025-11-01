@@ -14,15 +14,15 @@ cloudinary.config({
  * Upload file to Cloudinary
  * @param {string} filePath - Local file path
  * @param {string} folder - Cloudinary folder name
- * @param {string} userRole - User role (farmer/buyer)
- * @param {string} userId - User ID
- * @param {string} documentType - Type of document
+ * @param {string} userRole - User role (farmer/buyer) - optional
+ * @param {string} userId - User ID - optional
+ * @param {string} documentType - Type of document - optional
  * @returns {Promise<Object>} Cloudinary upload result
  */
 export const uploadToCloudinary = async (filePath, folder, userRole, userId, documentType) => {
   try {
-    // Create a structured folder path: agroconnect/{role}/{userId}/{documentType}
-    const folderPath = `agroconnect/${userRole}/${userId}/${documentType}`;
+    // Use provided folder or create structured folder path if userRole, userId, documentType provided
+    const folderPath = folder || `agroconnect/${userRole}/${userId}/${documentType}`;
 
     // Determine if file is PDF
     const isPdf = filePath.toLowerCase().endsWith('.pdf');
@@ -32,15 +32,17 @@ export const uploadToCloudinary = async (filePath, folder, userRole, userId, doc
     const uploadOptions = {
       folder: folderPath,
       resource_type: isPdf ? 'raw' : 'auto',
-      // Add tags for better organization
-      tags: [userRole, documentType, userId],
-      // Add metadata
-      context: {
+    };
+
+    // Add tags and context only if metadata is provided
+    if (userRole && userId && documentType) {
+      uploadOptions.tags = [userRole, documentType, userId];
+      uploadOptions.context = {
         role: userRole,
         document_type: documentType,
         user_id: userId,
-      },
-    };
+      };
+    }
 
     const result = await cloudinary.uploader.upload(filePath, uploadOptions);
 
@@ -54,7 +56,9 @@ export const uploadToCloudinary = async (filePath, folder, userRole, userId, doc
 
     return {
       url: secureUrl,
+      secure_url: secureUrl,
       publicId: result.public_id,
+      public_id: result.public_id,
       format: result.format,
       resourceType: result.resource_type,
       bytes: result.bytes,

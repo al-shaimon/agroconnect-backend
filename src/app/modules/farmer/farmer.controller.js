@@ -1,6 +1,8 @@
 import Product from '../product/product.model.js';
 import Order from '../order/order.model.js';
 import Notification from '../notification/notification.model.js';
+import { uploadToCloudinary, deleteFromCloudinary } from '../../../config/cloudinary.js';
+import fs from 'fs';
 
 // @desc    Create new product
 // @route   POST /api/farmer/products
@@ -14,11 +16,24 @@ export const createProduct = async (req, res) => {
       price,
       unit,
       availableQuantity,
-      imageUrl,
       quality,
       harvestDate,
       location,
     } = req.body;
+
+    let imageUrl = '';
+    let cloudinaryPublicId = '';
+
+    // Handle image upload if provided
+    if (req.file) {
+      const folderPath = `agroconnect/products/${req.user._id}`;
+      const result = await uploadToCloudinary(req.file.path, folderPath);
+      imageUrl = result.secure_url;
+      cloudinaryPublicId = result.public_id;
+
+      // Delete temporary file
+      fs.unlinkSync(req.file.path);
+    }
 
     const product = await Product.create({
       farmerId: req.user._id,
@@ -29,6 +44,7 @@ export const createProduct = async (req, res) => {
       unit,
       availableQuantity,
       imageUrl,
+      cloudinaryPublicId,
       quality,
       harvestDate,
       location,
@@ -40,6 +56,10 @@ export const createProduct = async (req, res) => {
       data: product,
     });
   } catch (error) {
+    // Clean up uploaded file if error occurs
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({
       success: false,
       message: error.message,
@@ -125,6 +145,27 @@ export const updateProduct = async (req, res) => {
       });
     }
 
+    // Handle new image upload
+    if (req.file) {
+      // Delete old image from Cloudinary if exists
+      if (product.cloudinaryPublicId) {
+        try {
+          await deleteFromCloudinary(product.cloudinaryPublicId, 'image');
+        } catch (error) {
+          console.error('Error deleting old image:', error);
+        }
+      }
+
+      // Upload new image
+      const folderPath = `agroconnect/products/${req.user._id}`;
+      const result = await uploadToCloudinary(req.file.path, folderPath);
+      req.body.imageUrl = result.secure_url;
+      req.body.cloudinaryPublicId = result.public_id;
+
+      // Delete temporary file
+      fs.unlinkSync(req.file.path);
+    }
+
     product = await Product.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
@@ -136,6 +177,10 @@ export const updateProduct = async (req, res) => {
       data: product,
     });
   } catch (error) {
+    // Clean up uploaded file if error occurs
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({
       success: false,
       message: error.message,
@@ -163,6 +208,15 @@ export const deleteProduct = async (req, res) => {
         success: false,
         message: 'Not authorized to delete this product',
       });
+    }
+
+    // Delete image from Cloudinary if exists
+    if (product.cloudinaryPublicId) {
+      try {
+        await deleteFromCloudinary(product.cloudinaryPublicId, 'image');
+      } catch (error) {
+        console.error('Error deleting image from Cloudinary:', error);
+      }
     }
 
     await Product.findByIdAndDelete(req.params.id);
@@ -315,6 +369,10 @@ export const getFarmerStats = async (req, res) => {
       farmerId,
       status: 'delivered',
     });
+    const cancelledOrders = await Order.countDocuments({
+      farmerId,
+      status: 'cancelled',
+    });
 
     // Calculate total revenue
     const revenueData = await Order.aggregate([
@@ -353,12 +411,68 @@ export const getFarmerStats = async (req, res) => {
           confirmed: confirmedOrders,
           inTransit: inTransitOrders,
           delivered: deliveredOrders,
+          cancelled: cancelledOrders,
         },
         revenue: {
           total: totalRevenue,
         },
         recentOrders,
       },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Get revenue analytics by product
+// @route   GET /api/farmer/analytics/revenue
+// @access  Private (Farmer only)
+export const getRevenueAnalytics = async (req, res) => {
+  try {
+    const farmerId = req.user._id;
+    const { days = 30 } = req.query;
+
+    // Calculate date range
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+
+    // Get revenue by product
+    const revenueByProduct = await Order.aggregate([
+      {
+        $match: {
+          farmerId: farmerId,
+          status: 'delivered',
+          createdAt: { $gte: startDate },
+        },
+      },
+      { $unwind: '$items' },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.productId',
+          foreignField: '_id',
+          as: 'productDetails',
+        },
+      },
+      { $unwind: '$productDetails' },
+      {
+        $group: {
+          _id: '$items.productId',
+          productName: { $first: '$productDetails.name' },
+          totalRevenue: { $sum: '$items.subtotal' },
+          totalQuantity: { $sum: '$items.quantity' },
+        },
+      },
+      { $sort: { totalRevenue: -1 } },
+      { $limit: 10 },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: revenueByProduct,
     });
   } catch (error) {
     res.status(500).json({

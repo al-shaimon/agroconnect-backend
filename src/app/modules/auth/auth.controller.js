@@ -185,10 +185,17 @@ export const updateProfile = async (req, res) => {
     user.phone = req.body.phone || user.phone;
 
     if (req.body.location) {
-      user.location = {
-        ...user.location,
-        ...req.body.location,
-      };
+      // Only update provided location fields
+      if (req.body.location.area !== undefined) {
+        user.location.area = req.body.location.area;
+      }
+      if (req.body.location.city !== undefined) {
+        user.location.city = req.body.location.city;
+      }
+      // Only update coordinates if explicitly provided
+      if (req.body.location.coordinates) {
+        user.location.coordinates = req.body.location.coordinates;
+      }
     }
 
     // Update password if provided
@@ -209,6 +216,11 @@ export const updateProfile = async (req, res) => {
         role: updatedUser.role,
         location: updatedUser.location,
         isVerified: updatedUser.isVerified,
+        verificationStatus: updatedUser.verificationStatus,
+        verificationDocuments: updatedUser.verificationDocuments,
+        rejectionReason: updatedUser.rejectionReason,
+        isActive: updatedUser.isActive,
+        createdAt: updatedUser.createdAt,
       },
     });
   } catch (error) {
