@@ -8,8 +8,8 @@ export const config = {
   mongoUri: process.env.MONGODB_URI,
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  allowedOrigins: process.env.ALLOWED_ORIGINS 
-    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  allowedOrigins: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
     : ['http://localhost:3000', 'http://localhost:5173'],
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',

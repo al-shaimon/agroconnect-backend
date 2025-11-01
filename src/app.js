@@ -15,7 +15,7 @@ const app = express();
 
 // Log environment info
 console.log('🚀 Initializing AgroConnect API...');
-console.log('Environment:', process.env.NODE_ENV ||' development');
+console.log('Environment:', process.env.NODE_ENV || ' development');
 console.log('Vercel:', process.env.VERCEL ? 'Yes' : 'No');
 console.log('MongoDB URI configured:', !!process.env.MONGODB_URI);
 
