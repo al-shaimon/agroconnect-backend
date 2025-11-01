@@ -12,23 +12,26 @@ cloudinary.config({
 
 /**
  * Upload file to Cloudinary
- * @param {string} filePath - Local file path
+ * @param {string|Buffer} file - File path (development) or buffer (production)
  * @param {string} folder - Cloudinary folder name
  * @param {string} userRole - User role (farmer/buyer) - optional
  * @param {string} userId - User ID - optional
  * @param {string} documentType - Type of document - optional
  * @returns {Promise<Object>} Cloudinary upload result
  */
-export const uploadToCloudinary = async (filePath, folder, userRole, userId, documentType) => {
+export const uploadToCloudinary = async (file, folder, userRole, userId, documentType) => {
   try {
     // Use provided folder or create structured folder path if userRole, userId, documentType provided
     const folderPath = folder || `agroconnect/${userRole}/${userId}/${documentType}`;
 
+    // Check if file is a buffer (production) or file path (development)
+    const isBuffer = Buffer.isBuffer(file);
+    const filePath = isBuffer ? null : file;
+
     // Determine if file is PDF
-    const isPdf = filePath.toLowerCase().endsWith('.pdf');
+    const isPdf = isBuffer ? false : filePath.toLowerCase().endsWith('.pdf');
 
     // Set resource type based on file type
-    // For PDFs, we need to use 'raw' or 'image' with specific format
     const uploadOptions = {
       folder: folderPath,
       resource_type: isPdf ? 'raw' : 'auto',
@@ -44,7 +47,21 @@ export const uploadToCloudinary = async (filePath, folder, userRole, userId, doc
       };
     }
 
-    const result = await cloudinary.uploader.upload(filePath, uploadOptions);
+    let result;
+
+    if (isBuffer) {
+      // Production: Upload from buffer
+      result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        });
+        uploadStream.end(file);
+      });
+    } else {
+      // Development: Upload from file path
+      result = await cloudinary.uploader.upload(filePath, uploadOptions);
+    }
 
     // For PDFs uploaded as 'raw', construct the proper URL
     let secureUrl = result.secure_url;

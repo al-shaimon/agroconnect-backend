@@ -6,6 +6,38 @@ import { uploadToCloudinary, deleteFromCloudinary } from '../../../config/cloudi
 import fs from 'fs';
 import { notifyOrderStatusUpdate } from '../../../utils/notificationHelper.js';
 
+// Helper function to handle file upload in both dev and prod
+const handleFileUpload = async (file, folder) => {
+  if (!file) return null;
+
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+
+  try {
+    let result;
+
+    if (isProduction) {
+      // Production: Upload buffer directly to Cloudinary
+      result = await uploadToCloudinary(file.buffer, folder);
+    } else {
+      // Development: Upload from file path
+      result = await uploadToCloudinary(file.path, folder);
+
+      // Delete local file after successful upload
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+    }
+
+    return result;
+  } catch (error) {
+    // Clean up local file on error (development only)
+    if (!isProduction && file.path && fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
+    throw error;
+  }
+};
+
 // @desc    Create new product
 // @route   POST /api/farmer/products
 // @access  Private (Farmer only)
@@ -38,12 +70,12 @@ export const createProduct = async (req, res) => {
     // Handle image upload if provided
     if (req.file) {
       const folderPath = `agroconnect/products/${req.user._id}`;
-      const result = await uploadToCloudinary(req.file.path, folderPath);
-      imageUrl = result.secure_url;
-      cloudinaryPublicId = result.public_id;
+      const result = await handleFileUpload(req.file, folderPath);
 
-      // Delete temporary file
-      fs.unlinkSync(req.file.path);
+      if (result) {
+        imageUrl = result.secure_url;
+        cloudinaryPublicId = result.public_id;
+      }
     }
 
     const product = await Product.create({
@@ -67,8 +99,9 @@ export const createProduct = async (req, res) => {
       data: product,
     });
   } catch (error) {
-    // Clean up uploaded file if error occurs
-    if (req.file && fs.existsSync(req.file.path)) {
+    // Clean up uploaded file if error occurs (development only)
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+    if (!isProduction && req.file && req.file.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
     res.status(500).json({
@@ -177,12 +210,12 @@ export const updateProduct = async (req, res) => {
 
       // Upload new image
       const folderPath = `agroconnect/products/${req.user._id}`;
-      const result = await uploadToCloudinary(req.file.path, folderPath);
-      req.body.imageUrl = result.secure_url;
-      req.body.cloudinaryPublicId = result.public_id;
+      const result = await handleFileUpload(req.file, folderPath);
 
-      // Delete temporary file
-      fs.unlinkSync(req.file.path);
+      if (result) {
+        req.body.imageUrl = result.secure_url;
+        req.body.cloudinaryPublicId = result.public_id;
+      }
     }
 
     product = await Product.findByIdAndUpdate(req.params.id, req.body, {
@@ -196,8 +229,9 @@ export const updateProduct = async (req, res) => {
       data: product,
     });
   } catch (error) {
-    // Clean up uploaded file if error occurs
-    if (req.file && fs.existsSync(req.file.path)) {
+    // Clean up uploaded file if error occurs (development only)
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+    if (!isProduction && req.file && req.file.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
     res.status(500).json({

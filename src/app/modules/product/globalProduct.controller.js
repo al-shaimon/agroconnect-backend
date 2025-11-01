@@ -4,6 +4,38 @@ import { v2 as cloudinary } from 'cloudinary';
 import { uploadToCloudinary } from '../../../config/cloudinary.js';
 import fs from 'fs';
 
+// Helper function to handle file upload in both dev and prod
+const handleFileUpload = async (file, folder) => {
+  if (!file) return null;
+
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+
+  try {
+    let result;
+
+    if (isProduction) {
+      // Production: Upload buffer directly to Cloudinary
+      result = await uploadToCloudinary(file.buffer, folder);
+    } else {
+      // Development: Upload from file path
+      result = await uploadToCloudinary(file.path, folder);
+
+      // Delete local file after successful upload
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+    }
+
+    return result;
+  } catch (error) {
+    // Clean up local file on error (development only)
+    if (!isProduction && file.path && fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
+    throw error;
+  }
+};
+
 // @desc    Create a new global product (Admin only)
 // @route   POST /api/admin/global-products
 // @access  Private (Admin only)
@@ -26,19 +58,13 @@ export const createGlobalProduct = async (req, res) => {
 
     if (req.file) {
       try {
-        // Upload to Cloudinary
-        const result = await uploadToCloudinary(req.file.path, 'agroconnect/products');
+        const result = await handleFileUpload(req.file, 'agroconnect/products');
 
-        images.push(result.secure_url);
-        cloudinaryPublicIds.push(result.public_id);
-
-        // Delete local file after upload
-        fs.unlinkSync(req.file.path);
-      } catch (uploadError) {
-        // Delete local file if upload fails
-        if (req.file.path && fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
+        if (result) {
+          images.push(result.secure_url);
+          cloudinaryPublicIds.push(result.public_id);
         }
+      } catch (uploadError) {
         throw new Error('Failed to upload image to Cloudinary');
       }
     }
@@ -163,19 +189,14 @@ export const updateGlobalProduct = async (req, res) => {
           await cloudinary.uploader.destroy(publicId).catch(console.error);
         }
 
-        // Upload new image to Cloudinary
-        const result = await uploadToCloudinary(req.file.path, 'agroconnect/products');
+        // Upload new image
+        const result = await handleFileUpload(req.file, 'agroconnect/products');
 
-        product.images = [result.secure_url];
-        product.cloudinaryPublicIds = [result.public_id];
-
-        // Delete local file after upload
-        fs.unlinkSync(req.file.path);
-      } catch (uploadError) {
-        // Delete local file if upload fails
-        if (req.file.path && fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
+        if (result) {
+          product.images = [result.secure_url];
+          product.cloudinaryPublicIds = [result.public_id];
         }
+      } catch (uploadError) {
         throw new Error('Failed to upload image to Cloudinary');
       }
     }

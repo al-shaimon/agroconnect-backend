@@ -5,6 +5,52 @@ import { uploadToCloudinary, deleteFromCloudinary } from '../../../config/cloudi
 import fs from 'fs';
 import { notifyAdminNewDocument } from '../../../utils/notificationHelper.js';
 
+// Helper function to handle file upload in both dev and prod
+const handleFileUpload = async (
+  file,
+  folder,
+  userRole = null,
+  userId = null,
+  documentType = null
+) => {
+  if (!file) return null;
+
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+
+  try {
+    let result;
+
+    if (isProduction) {
+      // Production: Upload buffer directly to Cloudinary
+      result = await uploadToCloudinary(file.buffer, folder, userRole, userId, documentType);
+    } else {
+      // Development: Upload from file path
+      result = await uploadToCloudinary(file.path, folder, userRole, userId, documentType);
+
+      // Delete local file after successful upload
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+    }
+
+    return result;
+  } catch (error) {
+    // Clean up local file on error (development only)
+    if (!isProduction && file.path && fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
+    throw error;
+  }
+};
+
+// Helper function to cleanup file on error
+const cleanupFile = (file) => {
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+  if (!isProduction && file && file.path && fs.existsSync(file.path)) {
+    fs.unlinkSync(file.path);
+  }
+};
+
 // Generate JWT Token
 const generateToken = (id) => {
   return jwt.sign({ id }, config.jwtSecret, {
@@ -22,9 +68,7 @@ export const register = async (req, res) => {
     // Validate role
     if (!['farmer', 'buyer'].includes(role)) {
       // Clean up uploaded file if validation fails
-      if (req.file) {
-        fs.unlinkSync(req.file.path);
-      }
+      cleanupFile(req.file);
       return res.status(400).json({
         success: false,
         message: 'Invalid role. Must be either farmer or buyer',
@@ -36,9 +80,7 @@ export const register = async (req, res) => {
 
     if (userExists) {
       // Clean up uploaded file if user exists
-      if (req.file) {
-        fs.unlinkSync(req.file.path);
-      }
+      cleanupFile(req.file);
       return res.status(400).json({
         success: false,
         message: 'User already exists with this email',
@@ -51,23 +93,20 @@ export const register = async (req, res) => {
 
     if (req.file) {
       try {
-        const result = await uploadToCloudinary(
-          req.file.path,
+        const result = await handleFileUpload(
+          req.file,
           `agroconnect/profiles/${role}`,
           role,
           null,
           null
         );
-        profileImageUrl = result.secure_url;
-        profileImagePublicId = result.public_id;
 
-        // Delete local file
-        fs.unlinkSync(req.file.path);
-      } catch (uploadError) {
-        // Delete local file on error
-        if (req.file) {
-          fs.unlinkSync(req.file.path);
+        if (result) {
+          profileImageUrl = result.secure_url;
+          profileImagePublicId = result.public_id;
         }
+      } catch (uploadError) {
+        cleanupFile(req.file);
         return res.status(500).json({
           success: false,
           message: 'Failed to upload profile image',
@@ -223,9 +262,7 @@ export const updateProfile = async (req, res) => {
 
     if (!user) {
       // Clean up uploaded file if user not found
-      if (req.file) {
-        fs.unlinkSync(req.file.path);
-      }
+      cleanupFile(req.file);
       return res.status(404).json({
         success: false,
         message: 'User not found',
@@ -241,23 +278,21 @@ export const updateProfile = async (req, res) => {
         }
 
         // Upload new profile image
-        const result = await uploadToCloudinary(
-          req.file.path,
+        const result = await handleFileUpload(
+          req.file,
           `agroconnect/profiles/${user.role}`,
           user.role,
           null,
           null
         );
-        user.profileImage = result.secure_url;
-        user.profileImagePublicId = result.public_id;
 
-        // Delete local file
-        fs.unlinkSync(req.file.path);
+        if (result) {
+          user.profileImage = result.secure_url;
+          user.profileImagePublicId = result.public_id;
+        }
       } catch (uploadError) {
         // Delete local file on error
-        if (req.file) {
-          fs.unlinkSync(req.file.path);
-        }
+        cleanupFile(req.file);
         return res.status(500).json({
           success: false,
           message: 'Failed to upload profile image',
@@ -345,11 +380,7 @@ export const uploadVerificationDocument = async (req, res) => {
     // Validate file count based on document type
     if (documentType === 'nid' && req.files.length !== 2) {
       // Delete uploaded files
-      req.files.forEach((file) => {
-        if (file.path && fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
-        }
-      });
+      req.files.forEach((file) => cleanupFile(file));
       return res.status(400).json({
         success: false,
         message: 'Please upload both front and back images of your NID (2 images required)',
@@ -358,11 +389,7 @@ export const uploadVerificationDocument = async (req, res) => {
 
     if (documentType !== 'nid' && req.files.length > 1) {
       // Delete uploaded files
-      req.files.forEach((file) => {
-        if (file.path && fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
-        }
-      });
+      req.files.forEach((file) => cleanupFile(file));
       return res.status(400).json({
         success: false,
         message: 'Please upload only one image for this document type',
@@ -373,11 +400,7 @@ export const uploadVerificationDocument = async (req, res) => {
 
     if (!user) {
       // Delete uploaded files if user not found
-      req.files.forEach((file) => {
-        if (file.path && fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
-        }
-      });
+      req.files.forEach((file) => cleanupFile(file));
       return res.status(404).json({
         success: false,
         message: 'User not found',
@@ -392,19 +415,18 @@ export const uploadVerificationDocument = async (req, res) => {
       const file = req.files[i];
       const suffix = documentType === 'nid' ? (i === 0 ? '_front' : '_back') : '';
 
-      const cloudinaryResult = await uploadToCloudinary(
-        file.path,
+      const cloudinaryResult = await handleFileUpload(
+        file,
         'agroconnect',
         user.role,
         user._id.toString(),
         documentType + suffix
       );
 
-      uploadedUrls.push(cloudinaryResult.url);
-      uploadedPublicIds.push(cloudinaryResult.publicId);
-
-      // Delete local file after successful upload to Cloudinary
-      fs.unlinkSync(file.path);
+      if (cloudinaryResult) {
+        uploadedUrls.push(cloudinaryResult.url);
+        uploadedPublicIds.push(cloudinaryResult.publicId);
+      }
     }
 
     // Add document to user's verification documents

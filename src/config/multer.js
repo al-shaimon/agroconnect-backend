@@ -7,22 +7,36 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, '../../uploads/verification');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+// Check if running in production/Vercel
+const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
 
-// Configure storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, 'doc-' + uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// Configure storage based on environment
+let storage;
+
+if (isProduction) {
+  // In production (Vercel), use memory storage
+  console.log('📦 Using memory storage for file uploads (Production/Vercel)');
+  storage = multer.memoryStorage();
+} else {
+  // In development, use disk storage
+  console.log('💾 Using disk storage for file uploads (Development)');
+
+  // Create uploads directory if it doesn't exist
+  const uploadsDir = path.join(__dirname, '../../uploads/verification');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, uploadsDir);
+    },
+    filename: function (req, file, cb) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      cb(null, 'doc-' + uniqueSuffix + path.extname(file.originalname));
+    },
+  });
+}
 
 // File filter
 const fileFilter = (req, file, cb) => {
