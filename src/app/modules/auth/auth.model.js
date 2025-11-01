@@ -22,10 +22,33 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
       select: false,
     },
+    phone: {
+      type: String,
+      required: [true, 'Please provide a phone number'],
+      trim: true,
+    },
     role: {
       type: String,
-      enum: ['user', 'admin'],
-      default: 'user',
+      enum: ['farmer', 'buyer', 'admin'],
+      required: [true, 'Please specify a role'],
+    },
+    location: {
+      area: {
+        type: String,
+        trim: true,
+      },
+      city: {
+        type: String,
+        trim: true,
+      },
+      coordinates: {
+        lat: Number,
+        lng: Number,
+      },
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
     },
     isActive: {
       type: Boolean,

@@ -1,18 +1,27 @@
 import express from 'express';
 import authRoutes from './modules/auth/auth.routes.js';
-import userRoutes from './modules/user/user.routes.js';
+import farmerRoutes from './modules/farmer/farmer.routes.js';
+import buyerRoutes from './modules/buyer/buyer.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
+import notificationRoutes from './modules/notification/notification.routes.js';
+import publicRoutes from './modules/public/public.routes.js';
 
 const router = express.Router();
 
 // API Routes
 router.use('/auth', authRoutes);
-router.use('/users', userRoutes);
+router.use('/farmer', farmerRoutes);
+router.use('/buyer', buyerRoutes);
+router.use('/admin', adminRoutes);
+router.use('/notifications', notificationRoutes);
+router.use('/public', publicRoutes);
 
 // Health check route
 router.get('/health', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Server is running',
+    message: 'AgroConnect API is running',
+    timestamp: new Date().toISOString(),
   });
 });
 

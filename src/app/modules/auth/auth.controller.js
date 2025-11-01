@@ -9,12 +9,20 @@ const generateToken = (id) => {
   });
 };
 
-// @desc    Register new user
+// @desc    Register new user (farmer/buyer)
 // @route   POST /api/auth/register
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, phone, role, location } = req.body;
+
+    // Validate role
+    if (!['farmer', 'buyer'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role. Must be either farmer or buyer',
+      });
+    }
 
     // Check if user exists
     const userExists = await User.findOne({ email });
@@ -22,7 +30,7 @@ export const register = async (req, res) => {
     if (userExists) {
       return res.status(400).json({
         success: false,
-        message: 'User already exists',
+        message: 'User already exists with this email',
       });
     }
 
@@ -31,6 +39,9 @@ export const register = async (req, res) => {
       name,
       email,
       password,
+      phone,
+      role,
+      location,
     });
 
     if (user) {
@@ -41,7 +52,10 @@ export const register = async (req, res) => {
           _id: user._id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
           role: user.role,
+          location: user.location,
+          isVerified: user.isVerified,
           token: generateToken(user._id),
         },
       });
@@ -71,6 +85,14 @@ export const login = async (req, res) => {
       });
     }
 
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated. Please contact support',
+      });
+    }
+
     // Check if password matches
     const isMatch = await user.matchPassword(password);
 
@@ -88,7 +110,10 @@ export const login = async (req, res) => {
         _id: user._id,
         name: user.name,
         email: user.email,
+        phone: user.phone,
         role: user.role,
+        location: user.location,
+        isVerified: user.isVerified,
         token: generateToken(user._id),
       },
     });
@@ -113,7 +138,65 @@ export const getMe = async (req, res) => {
         _id: user._id,
         name: user.name,
         email: user.email,
+        phone: user.phone,
         role: user.role,
+        location: user.location,
+        isVerified: user.isVerified,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Update user profile
+// @route   PUT /api/auth/profile
+// @access  Private
+export const updateProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    // Update allowed fields
+    user.name = req.body.name || user.name;
+    user.phone = req.body.phone || user.phone;
+
+    if (req.body.location) {
+      user.location = {
+        ...user.location,
+        ...req.body.location,
+      };
+    }
+
+    // Update password if provided
+    if (req.body.password) {
+      user.password = req.body.password;
+    }
+
+    const updatedUser = await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        _id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        phone: updatedUser.phone,
+        role: updatedUser.role,
+        location: updatedUser.location,
+        isVerified: updatedUser.isVerified,
       },
     });
   } catch (error) {
