@@ -1,8 +1,10 @@
 import Product from '../product/product.model.js';
 import Order from '../order/order.model.js';
+import User from '../auth/auth.model.js';
 import Notification from '../notification/notification.model.js';
 import { uploadToCloudinary, deleteFromCloudinary } from '../../../config/cloudinary.js';
 import fs from 'fs';
+import { notifyOrderStatusUpdate } from '../../../utils/notificationHelper.js';
 
 // @desc    Create new product
 // @route   POST /api/farmer/products
@@ -327,14 +329,23 @@ export const updateOrderStatus = async (req, res) => {
 
     await order.save();
 
-    // Create notification for buyer
-    await Notification.create({
-      recipientId: order.buyerId,
-      type: 'order',
-      title: 'Order Status Updated',
-      message: `Your order ${order.orderId} status has been updated to ${status}`,
-      orderId: order._id,
-    });
+    // Get farmer name for notification
+    const farmer = await User.findById(order.farmerId);
+    const farmerName = farmer ? farmer.name : 'the farmer';
+
+    // Get Socket.IO instance and connected users
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+
+    // Send notification and email to buyer
+    await notifyOrderStatusUpdate(
+      order.buyerId,
+      order._id,
+      status,
+      farmerName,
+      io,
+      connectedUsers
+    ).catch((err) => console.error('Error notifying buyer:', err));
 
     res.status(200).json({
       success: true,

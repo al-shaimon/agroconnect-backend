@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { config } from '../../../config/config.js';
 import { uploadToCloudinary, deleteFromCloudinary } from '../../../config/cloudinary.js';
 import fs from 'fs';
+import { notifyAdminNewDocument } from '../../../utils/notificationHelper.js';
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -424,6 +425,14 @@ export const uploadVerificationDocument = async (req, res) => {
 
     await user.save();
 
+    // Notify all admins about new document submission
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+
+    await notifyAdminNewDocument(user.name, user._id, io, connectedUsers).catch((err) =>
+      console.error('Error notifying admins:', err)
+    );
+
     res.status(200).json({
       success: true,
       message: 'Verification document uploaded successfully',
@@ -434,9 +443,11 @@ export const uploadVerificationDocument = async (req, res) => {
         phone: user.phone,
         role: user.role,
         location: user.location,
+        profileImage: user.profileImage,
         isVerified: user.isVerified,
         verificationStatus: user.verificationStatus,
         verificationDocuments: user.verificationDocuments,
+        rejectionReason: user.rejectionReason,
         isActive: user.isActive,
         createdAt: user.createdAt,
       },
@@ -516,7 +527,7 @@ export const deleteVerificationDocument = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Document deleted successfully',
+      message: 'Verification document uploaded successfully',
       data: {
         _id: user._id,
         name: user.name,
@@ -524,6 +535,7 @@ export const deleteVerificationDocument = async (req, res) => {
         phone: user.phone,
         role: user.role,
         location: user.location,
+        profileImage: user.profileImage,
         isVerified: user.isVerified,
         verificationStatus: user.verificationStatus,
         verificationDocuments: user.verificationDocuments,

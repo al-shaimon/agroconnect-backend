@@ -1,4 +1,8 @@
 import User from '../auth/auth.model.js';
+import {
+  notifyVerificationApproved,
+  notifyVerificationRejected,
+} from '../../../utils/notificationHelper.js';
 
 // @desc    Get all pending verifications
 // @route   GET /api/admin/verifications/pending
@@ -112,6 +116,15 @@ export const approveVerification = async (req, res) => {
 
     await user.save();
 
+    // Get Socket.IO instance and connected users
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+
+    // Send notification and email to user
+    await notifyVerificationApproved(user._id, user.name, io, connectedUsers).catch((err) =>
+      console.error('Error notifying user:', err)
+    );
+
     res.status(200).json({
       success: true,
       message: 'User verification approved successfully',
@@ -160,6 +173,15 @@ export const rejectVerification = async (req, res) => {
     user.rejectionReason = reason;
 
     await user.save();
+
+    // Get Socket.IO instance and connected users
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+
+    // Send notification and email to user
+    await notifyVerificationRejected(user._id, user.name, reason, io, connectedUsers).catch((err) =>
+      console.error('Error notifying user:', err)
+    );
 
     res.status(200).json({
       success: true,

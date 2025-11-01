@@ -2,6 +2,7 @@ import Product from '../product/product.model.js';
 import Order from '../order/order.model.js';
 import Notification from '../notification/notification.model.js';
 import ProductSlot from '../product/productSlot.model.js';
+import { notifyFarmerNewOrder } from '../../../utils/notificationHelper.js';
 
 // @desc    Browse all available products (with filters)
 // @route   GET /api/buyer/products
@@ -185,14 +186,28 @@ export const placeOrder = async (req, res) => {
       notes,
     });
 
-    // Create notification for farmer
-    await Notification.create({
-      recipientId: farmerId,
-      type: 'order',
-      title: 'New Order Received',
-      message: `You have received a new order ${order.orderId} for ৳${totalAmount}`,
-      orderId: order._id,
-    });
+    // Populate order for notification
+    const populatedOrder = await Order.findById(order._id)
+      .populate('buyerId', 'name email')
+      .populate('farmerId', 'name email');
+
+    // Get Socket.IO instance and connected users
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+
+    // Send comprehensive notification to farmer (in-app + push + email)
+    await notifyFarmerNewOrder(
+      farmerId,
+      {
+        orderId: populatedOrder._id,
+        buyerName: populatedOrder.buyerId.name,
+        items: orderItems,
+        totalAmount,
+        deliveryAddress,
+      },
+      io,
+      connectedUsers
+    ).catch((err) => console.error('Error sending farmer notification:', err));
 
     res.status(201).json({
       success: true,
