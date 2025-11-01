@@ -13,6 +13,10 @@ const __dirname = dirname(__filename);
 
 const app = express();
 
+// Log environment info
+console.log('Environment:', process.env.NODE_ENV);
+console.log('Vercel:', process.env.VERCEL ? 'Yes' : 'No');
+
 // Middleware
 app.use(
   cors({
@@ -30,6 +34,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Middleware to ensure DB connection for serverless environments
 app.use(async (req, res, next) => {
   try {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
     await connectDB();
     next();
   } catch (error) {
@@ -37,6 +42,7 @@ app.use(async (req, res, next) => {
     res.status(503).json({
       success: false,
       message: 'Database connection unavailable',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 });
@@ -48,8 +54,9 @@ app.use('/api', routes);
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Welcome to the API',
+    message: 'Welcome to AgroConnect API',
     version: '1.0.0',
+    timestamp: new Date().toISOString(),
   });
 });
 

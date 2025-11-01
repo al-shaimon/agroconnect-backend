@@ -14,42 +14,40 @@ const startServer = async () => {
     // Create HTTP server
     const server = createServer(app);
 
-    // Initialize Socket.IO (only in non-serverless environment)
-    if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-      const io = new Server(server, {
-        cors: {
-          origin: config.allowedOrigins,
-          credentials: true,
-        },
+    // Initialize Socket.IO
+    const io = new Server(server, {
+      cors: {
+        origin: config.allowedOrigins,
+        credentials: true,
+      },
+    });
+
+    // Store connected users
+    const connectedUsers = new Map();
+
+    // Socket.IO connection handling
+    io.on('connection', (socket) => {
+      console.log('🔌 New socket connection:', socket.id);
+
+      // User joins with their ID
+      socket.on('join', (userId) => {
+        console.log(`👤 User ${userId} joined with socket ${socket.id}`);
+        connectedUsers.set(userId, socket.id);
+        socket.userId = userId;
       });
 
-      // Store connected users
-      const connectedUsers = new Map();
-
-      // Socket.IO connection handling
-      io.on('connection', (socket) => {
-        console.log('🔌 New socket connection:', socket.id);
-
-        // User joins with their ID
-        socket.on('join', (userId) => {
-          console.log(`👤 User ${userId} joined with socket ${socket.id}`);
-          connectedUsers.set(userId, socket.id);
-          socket.userId = userId;
-        });
-
-        // Handle disconnect
-        socket.on('disconnect', () => {
-          if (socket.userId) {
-            console.log(`👤 User ${socket.userId} disconnected`);
-            connectedUsers.delete(socket.userId);
-          }
-        });
+      // Handle disconnect
+      socket.on('disconnect', () => {
+        if (socket.userId) {
+          console.log(`👤 User ${socket.userId} disconnected`);
+          connectedUsers.delete(socket.userId);
+        }
       });
+    });
 
-      // Make io and connectedUsers available globally
-      app.set('io', io);
-      app.set('connectedUsers', connectedUsers);
-    }
+    // Make io and connectedUsers available globally
+    app.set('io', io);
+    app.set('connectedUsers', connectedUsers);
 
     // Start server
     const PORT = config.port;
@@ -64,5 +62,13 @@ const startServer = async () => {
   }
 };
 
-// Start the server
-startServer();
+// Check if running in Vercel serverless environment
+const isVercel = process.env.VERCEL || process.env.NOW_REGION;
+
+// Only start the server if not in Vercel
+if (!isVercel) {
+  startServer();
+}
+
+// Export for Vercel serverless
+export default app;

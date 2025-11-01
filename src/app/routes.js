@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import authRoutes from './modules/auth/auth.routes.js';
 import farmerRoutes from './modules/farmer/farmer.routes.js';
 import buyerRoutes from './modules/buyer/buyer.routes.js';
@@ -30,10 +31,23 @@ router.use('/products', productRoutes);
 
 // Health check route
 router.get('/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'AgroConnect API is running',
+  const dbState = mongoose.connection.readyState;
+  const dbStatus = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting',
+  };
+
+  res.status(dbState === 1 ? 200 : 503).json({
+    success: dbState === 1,
+    message: 'AgroConnect API Health Check',
     timestamp: new Date().toISOString(),
+    database: {
+      status: dbStatus[dbState],
+      host: mongoose.connection.host || 'N/A',
+    },
+    environment: process.env.NODE_ENV || 'development',
   });
 });
 
