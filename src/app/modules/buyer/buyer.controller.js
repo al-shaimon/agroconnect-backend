@@ -122,50 +122,13 @@ export const placeOrder = async (req, res) => {
         });
       }
 
-      // Validate delivery slot if provided
+      // Handle delivery slot if provided (buyer-selected time slot)
       let slotInfo = null;
-      if (item.slotId) {
-        const slot = await ProductSlot.findById(item.slotId);
-
-        if (!slot) {
-          return res.status(404).json({
-            success: false,
-            message: `Delivery slot not found for product ${product.name}`,
-          });
-        }
-
-        // Verify slot belongs to this product
-        if (slot.productId.toString() !== product._id.toString()) {
-          return res.status(400).json({
-            success: false,
-            message: `Invalid slot for product ${product.name}`,
-          });
-        }
-
-        // Check if slot is active
-        if (!slot.isActive) {
-          return res.status(400).json({
-            success: false,
-            message: `Selected delivery slot for ${product.name} is no longer active`,
-          });
-        }
-
-        // Check slot availability
-        if (slot.availableQuantity < item.quantity) {
-          return res.status(400).json({
-            success: false,
-            message: `Insufficient quantity in selected slot for ${product.name}. Available: ${slot.availableQuantity}, Requested: ${item.quantity}`,
-          });
-        }
-
-        // Deduct quantity from slot
-        slot.availableQuantity -= item.quantity;
-        await slot.save();
-
+      if (item.deliverySlot) {
+        // Buyer provides: { date, timeSlot: { start, end } }
         slotInfo = {
-          slotId: slot._id,
-          date: slot.date,
-          timeSlot: slot.timeSlot,
+          date: item.deliverySlot.date,
+          timeSlot: item.deliverySlot.timeSlot,
         };
       }
 
