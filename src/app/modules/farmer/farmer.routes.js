@@ -10,6 +10,14 @@ import {
   getFarmerStats,
   getRevenueAnalytics,
 } from './farmer.controller.js';
+import {
+  createOrUpdateSlots,
+  getProductSlots,
+  getFarmerSlots,
+  toggleSlotStatus,
+  deleteSlot,
+  getAvailableTimeSlots,
+} from '../product/productSlot.controller.js';
 import { protect } from '../../middlewares/auth.middleware.js';
 import { roleCheck } from '../../middlewares/roleCheck.middleware.js';
 import { body } from 'express-validator';
@@ -59,5 +67,13 @@ router.get('/stats', getFarmerStats);
 
 // Analytics route
 router.get('/analytics/revenue', getRevenueAnalytics);
+
+// Slot management routes
+router.get('/slots/available-times', getAvailableTimeSlots);
+router.get('/slots', getFarmerSlots);
+router.post('/products/:productId/slots', createOrUpdateSlots);
+router.get('/products/:productId/slots', getProductSlots);
+router.patch('/slots/:slotId/toggle', toggleSlotStatus);
+router.delete('/slots/:slotId', deleteSlot);
 
 export default router;

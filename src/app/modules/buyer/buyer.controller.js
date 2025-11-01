@@ -1,6 +1,7 @@
 import Product from '../product/product.model.js';
 import Order from '../order/order.model.js';
 import Notification from '../notification/notification.model.js';
+import ProductSlot from '../product/productSlot.model.js';
 
 // @desc    Browse all available products (with filters)
 // @route   GET /api/buyer/products
@@ -121,6 +122,53 @@ export const placeOrder = async (req, res) => {
         });
       }
 
+      // Validate delivery slot if provided
+      let slotInfo = null;
+      if (item.slotId) {
+        const slot = await ProductSlot.findById(item.slotId);
+
+        if (!slot) {
+          return res.status(404).json({
+            success: false,
+            message: `Delivery slot not found for product ${product.name}`,
+          });
+        }
+
+        // Verify slot belongs to this product
+        if (slot.productId.toString() !== product._id.toString()) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid slot for product ${product.name}`,
+          });
+        }
+
+        // Check if slot is active
+        if (!slot.isActive) {
+          return res.status(400).json({
+            success: false,
+            message: `Selected delivery slot for ${product.name} is no longer active`,
+          });
+        }
+
+        // Check slot availability
+        if (slot.availableQuantity < item.quantity) {
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient quantity in selected slot for ${product.name}. Available: ${slot.availableQuantity}, Requested: ${item.quantity}`,
+          });
+        }
+
+        // Deduct quantity from slot
+        slot.availableQuantity -= item.quantity;
+        await slot.save();
+
+        slotInfo = {
+          slotId: slot._id,
+          date: slot.date,
+          timeSlot: slot.timeSlot,
+        };
+      }
+
       if (!product.isAvailable || product.availableQuantity < item.quantity) {
         return res.status(400).json({
           success: false,
@@ -141,13 +189,20 @@ export const placeOrder = async (req, res) => {
       const subtotal = product.price * item.quantity;
       totalAmount += subtotal;
 
-      orderItems.push({
+      const orderItem = {
         productId: product._id,
         productName: product.name,
         quantity: item.quantity,
         pricePerUnit: product.price,
         subtotal,
-      });
+      };
+
+      // Add slot info if available
+      if (slotInfo) {
+        orderItem.deliverySlot = slotInfo;
+      }
+
+      orderItems.push(orderItem);
 
       // Reduce product quantity
       product.availableQuantity -= item.quantity;

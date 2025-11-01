@@ -43,6 +43,19 @@ const orderSchema = new mongoose.Schema(
           required: true,
           min: [0, 'Subtotal cannot be negative'],
         },
+        deliverySlot: {
+          slotId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'ProductSlot',
+          },
+          date: {
+            type: Date,
+          },
+          timeSlot: {
+            start: String,
+            end: String,
+          },
+        },
       },
     ],
     totalAmount: {
