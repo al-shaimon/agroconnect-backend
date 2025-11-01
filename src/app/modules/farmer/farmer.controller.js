@@ -1,4 +1,4 @@
-import Product from '../product/product.model.js';
+import FarmerProduct from '../product/farmerProduct.model.js';
 import Order from '../order/order.model.js';
 import User from '../auth/auth.model.js';
 import Notification from '../notification/notification.model.js';
@@ -367,11 +367,11 @@ export const getFarmerStats = async (req, res) => {
   try {
     const farmerId = req.user._id;
 
-    // Get total products
-    const totalProducts = await Product.countDocuments({ farmerId });
+    // Get total farmer products
+    const totalProducts = await FarmerProduct.countDocuments({ farmerId });
 
     // Get available products
-    const availableProducts = await Product.countDocuments({
+    const availableProducts = await FarmerProduct.countDocuments({
       farmerId,
       isAvailable: true,
       availableQuantity: { $gt: 0 },
@@ -478,18 +478,9 @@ export const getRevenueAnalytics = async (req, res) => {
       },
       { $unwind: '$items' },
       {
-        $lookup: {
-          from: 'products',
-          localField: 'items.productId',
-          foreignField: '_id',
-          as: 'productDetails',
-        },
-      },
-      { $unwind: '$productDetails' },
-      {
         $group: {
-          _id: '$items.productId',
-          productName: { $first: '$productDetails.name' },
+          _id: '$items.productName',
+          productName: { $first: '$items.productName' },
           totalRevenue: { $sum: '$items.subtotal' },
           totalQuantity: { $sum: '$items.quantity' },
         },

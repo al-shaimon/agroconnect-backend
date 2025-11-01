@@ -1,102 +1,11 @@
-import Product from '../product/product.model.js';
+import FarmerProduct from '../product/farmerProduct.model.js';
 import Order from '../order/order.model.js';
 import Notification from '../notification/notification.model.js';
-import ProductSlot from '../product/productSlot.model.js';
 import User from '../auth/auth.model.js';
 import {
   notifyFarmerNewOrder,
   notifyFarmerOrderCancelled,
 } from '../../../utils/notificationHelper.js';
-
-// @desc    Browse all available products (with filters)
-// @route   GET /api/buyer/products
-// @access  Private (Buyer only)
-export const browseProducts = async (req, res) => {
-  try {
-    const {
-      category,
-      quality,
-      minPrice,
-      maxPrice,
-      search,
-      sortBy = 'createdAt',
-      order = 'desc',
-    } = req.query;
-
-    // Build filter
-    const filter = { isAvailable: true, availableQuantity: { $gt: 0 } };
-
-    if (category) {
-      filter.category = category;
-    }
-
-    if (quality) {
-      filter.quality = quality;
-    }
-
-    if (minPrice || maxPrice) {
-      filter.price = {};
-      if (minPrice) filter.price.$gte = parseFloat(minPrice);
-      if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
-    }
-
-    if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { category: { $regex: search, $options: 'i' } },
-      ];
-    }
-
-    // Build sort
-    const sortOrder = order === 'asc' ? 1 : -1;
-    const sortObj = { [sortBy]: sortOrder };
-
-    const products = await Product.find(filter)
-      .populate('farmerId', 'name phone location email')
-      .sort(sortObj);
-
-    res.status(200).json({
-      success: true,
-      count: products.length,
-      data: products,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// @desc    Get single product details
-// @route   GET /api/buyer/products/:id
-// @access  Private (Buyer only)
-export const getProductDetails = async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id).populate(
-      'farmerId',
-      'name phone location email'
-    );
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found',
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: product,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
 
 // @desc    Place new order
 // @route   POST /api/buyer/orders
@@ -118,9 +27,12 @@ export const placeOrder = async (req, res) => {
     let farmerId = null;
 
     for (const item of items) {
-      const product = await Product.findById(item.productId);
+      // productId is actually farmerProductId now
+      const farmerProduct = await FarmerProduct.findById(item.productId).populate(
+        'globalProductId'
+      );
 
-      if (!product) {
+      if (!farmerProduct) {
         return res.status(404).json({
           success: false,
           message: `Product ${item.productId} not found`,
@@ -137,31 +49,33 @@ export const placeOrder = async (req, res) => {
         };
       }
 
-      if (!product.isAvailable || product.availableQuantity < item.quantity) {
+      if (!farmerProduct.isAvailable || farmerProduct.availableQuantity < item.quantity) {
         return res.status(400).json({
           success: false,
-          message: `Product ${product.name} is not available in the requested quantity`,
+          message: `Product ${
+            farmerProduct.globalProductId?.name || 'Unknown'
+          } is not available in the requested quantity`,
         });
       }
 
       // All items must be from the same farmer
       if (farmerId === null) {
-        farmerId = product.farmerId;
-      } else if (farmerId.toString() !== product.farmerId.toString()) {
+        farmerId = farmerProduct.farmerId;
+      } else if (farmerId.toString() !== farmerProduct.farmerId.toString()) {
         return res.status(400).json({
           success: false,
           message: 'All items in an order must be from the same farmer',
         });
       }
 
-      const subtotal = product.price * item.quantity;
+      const subtotal = farmerProduct.price * item.quantity;
       totalAmount += subtotal;
 
       const orderItem = {
-        productId: product._id,
-        productName: product.name,
+        productId: farmerProduct._id, // Store farmerProductId
+        productName: farmerProduct.globalProductId?.name || 'Unknown Product',
         quantity: item.quantity,
-        pricePerUnit: product.price,
+        pricePerUnit: farmerProduct.price,
         subtotal,
       };
 
@@ -173,11 +87,11 @@ export const placeOrder = async (req, res) => {
       orderItems.push(orderItem);
 
       // Reduce product quantity
-      product.availableQuantity -= item.quantity;
-      if (product.availableQuantity === 0) {
-        product.isAvailable = false;
+      farmerProduct.availableQuantity -= item.quantity;
+      if (farmerProduct.availableQuantity === 0) {
+        farmerProduct.isAvailable = false;
       }
-      await product.save();
+      await farmerProduct.save();
     }
 
     // Create order

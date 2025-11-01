@@ -1,7 +1,5 @@
 import express from 'express';
 import {
-  browseProducts,
-  getProductDetails,
   placeOrder,
   getMyOrders,
   getOrderDetails,
@@ -28,10 +26,6 @@ const orderValidation = [
   body('deliveryAddress.area').notEmpty().withMessage('Delivery area is required'),
   body('deliveryAddress.city').notEmpty().withMessage('Delivery city is required'),
 ];
-
-// Product browsing routes
-router.get('/products', browseProducts);
-router.get('/products/:id', getProductDetails);
 
 // Order routes
 router.post('/orders', orderValidation, validate, placeOrder);

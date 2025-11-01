@@ -21,7 +21,7 @@ const orderSchema = new mongoose.Schema(
       {
         productId: {
           type: mongoose.Schema.Types.ObjectId,
-          ref: 'Product',
+          ref: 'FarmerProduct',
           required: true,
         },
         productName: {
@@ -44,12 +44,8 @@ const orderSchema = new mongoose.Schema(
           min: [0, 'Subtotal cannot be negative'],
         },
         deliverySlot: {
-          slotId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'ProductSlot',
-          },
           date: {
-            type: Date,
+            type: String,
           },
           timeSlot: {
             start: String,
