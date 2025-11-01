@@ -1,3 +1,4 @@
 node_modules .env .env.local .git .gitignore uploads/ _.log .DS_Store README.md
-PRODUCT_ARCHITECTURE.md API_DOCUMENTATION.md VERCEL_DEPLOYMENT.md _.postman_collection.json seed.js
-seed-\*.js
+PRODUCT_ARCHITECTURE.md API_DOCUMENTATION.md VERCEL_DEPLOYMENT.md DEPLOYMENT_CHECKLIST.md
+TEST_DEPLOYMENT.md TROUBLESHOOTING.md _.postman_collection.json seed.js seed-\*.js
+test-db-connection.js
