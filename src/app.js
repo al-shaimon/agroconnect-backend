@@ -14,8 +14,10 @@ const __dirname = dirname(__filename);
 const app = express();
 
 // Log environment info
-console.log('Environment:', process.env.NODE_ENV);
+console.log('🚀 Initializing AgroConnect API...');
+console.log('Environment:', process.env.NODE_ENV ||' development');
 console.log('Vercel:', process.env.VERCEL ? 'Yes' : 'No');
+console.log('MongoDB URI configured:', !!process.env.MONGODB_URI);
 
 // Middleware
 app.use(
@@ -38,11 +40,11 @@ app.use(async (req, res, next) => {
     await connectDB();
     next();
   } catch (error) {
-    console.error('Database connection failed:', error);
+    console.error('❌ Database connection failed:', error);
     res.status(503).json({
       success: false,
       message: 'Database connection unavailable',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Please check server logs',
     });
   }
 });
