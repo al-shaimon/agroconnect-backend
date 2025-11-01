@@ -2,6 +2,11 @@ import User from '../auth/auth.model.js';
 import Order from '../order/order.model.js';
 import Product from '../product/product.model.js';
 import Notification from '../notification/notification.model.js';
+import { sendBroadcastEmail } from '../../../utils/emailService.js';
+import {
+  notifyVerificationApproved,
+  notifyAccountStatusChange,
+} from '../../../utils/notificationHelper.js';
 
 // @desc    Get all users (with filters by role)
 // @route   GET /api/admin/users
@@ -96,13 +101,14 @@ export const verifyUser = async (req, res) => {
     user.isVerified = true;
     await user.save();
 
-    // Create notification for user
-    await Notification.create({
-      recipientId: user._id,
-      type: 'system',
-      title: 'Account Verified',
-      message: 'Your account has been verified by the administrator',
-    });
+    // Get Socket.IO instance
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+
+    // Send notification and email
+    await notifyVerificationApproved(user._id, user.name, io, connectedUsers).catch((err) =>
+      console.error('Error notifying user:', err)
+    );
 
     res.status(200).json({
       success: true,
@@ -143,15 +149,14 @@ export const updateUserStatus = async (req, res) => {
     user.isActive = isActive;
     await user.save();
 
-    // Create notification for user
-    await Notification.create({
-      recipientId: user._id,
-      type: 'system',
-      title: `Account ${isActive ? 'Activated' : 'Deactivated'}`,
-      message: `Your account has been ${
-        isActive ? 'activated' : 'deactivated'
-      } by the administrator`,
-    });
+    // Get Socket.IO instance
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+
+    // Send notification and email
+    await notifyAccountStatusChange(user._id, user.name, isActive, io, connectedUsers).catch(
+      (err) => console.error('Error notifying user:', err)
+    );
 
     res.status(200).json({
       success: true,
@@ -388,14 +393,45 @@ export const sendBroadcast = async (req, res) => {
       message,
     });
 
-    // Get count of affected users
+    // Get all eligible users
     const filter = recipientRole === 'all' ? {} : { role: recipientRole };
-    const affectedUsers = await User.countDocuments(filter);
+    const users = await User.find(filter).select('name email');
+
+    // Send emails to all eligible users
+    let emailsSent = 0;
+    let emailsFailed = 0;
+
+    // Send emails in batches to avoid overwhelming the email service
+    const batchSize = 10;
+    for (let i = 0; i < users.length; i += batchSize) {
+      const batch = users.slice(i, i + batchSize);
+
+      await Promise.allSettled(
+        batch.map(async (user) => {
+          try {
+            await sendBroadcastEmail(user.email, user.name, { title, message });
+            emailsSent++;
+          } catch (error) {
+            console.error(`Failed to send email to ${user.email}:`, error.message);
+            emailsFailed++;
+          }
+        })
+      );
+    }
+
+    console.log(`📧 Broadcast emails sent: ${emailsSent}, failed: ${emailsFailed}`);
 
     res.status(201).json({
       success: true,
-      message: `Broadcast sent successfully to ${affectedUsers} users`,
-      data: notification,
+      message: `Broadcast sent successfully to ${users.length} users (${emailsSent} emails sent)`,
+      data: {
+        notification,
+        stats: {
+          totalUsers: users.length,
+          emailsSent,
+          emailsFailed,
+        },
+      },
     });
   } catch (error) {
     res.status(500).json({

@@ -354,6 +354,99 @@ export const sendWelcomeEmail = async (userEmail, userName, userRole) => {
   });
 };
 
+export const sendBroadcastEmail = async (userEmail, userName, broadcastData) => {
+  const { title, message } = broadcastData;
+
+  const content = `
+    <h2>📢 ${title}</h2>
+    <p>Dear ${userName},</p>
+    <div class="info-box">
+      <p style="margin: 0; white-space: pre-wrap;">${message}</p>
+    </div>
+    <p>This is an important announcement from the AgroConnect team. If you have any questions, please feel free to contact us.</p>
+    <p>Thank you for being a valued member of our community!</p>
+  `;
+
+  return sendEmail({
+    to: userEmail,
+    subject: `📢 ${title}`,
+    html: getEmailTemplate(
+      title,
+      content,
+      'Visit Dashboard',
+      `${process.env.FRONTEND_URL || 'http://localhost:5173'}/`
+    ),
+  });
+};
+
+export const sendAccountStatusEmail = async (userEmail, userName, isActive) => {
+  const status = isActive ? 'Activated' : 'Deactivated';
+  const emoji = isActive ? '✅' : '⚠️';
+
+  const content = `
+    <h2>${emoji} Account ${status}</h2>
+    <p>Dear ${userName},</p>
+    ${
+      isActive
+        ? `
+      <div class="info-box">
+        <p style="margin: 0;"><strong>✅ Your account has been reactivated!</strong></p>
+        <p style="margin: 8px 0 0 0;">You can now access all features and continue using AgroConnect.</p>
+      </div>
+      <p>Welcome back! You can now log in and resume your activities on our platform.</p>
+    `
+        : `
+      <div class="warning-box">
+        <p style="margin: 0;"><strong>⚠️ Your account has been temporarily deactivated.</strong></p>
+        <p style="margin: 8px 0 0 0;">You will not be able to access platform features until your account is reactivated.</p>
+      </div>
+      <p>If you believe this is a mistake or need assistance, please contact our support team.</p>
+    `
+    }
+  `;
+
+  return sendEmail({
+    to: userEmail,
+    subject: `${emoji} Your AgroConnect Account Has Been ${status}`,
+    html: getEmailTemplate(
+      `Account ${status}`,
+      content,
+      isActive ? 'Go to Dashboard' : 'Contact Support',
+      `${process.env.FRONTEND_URL || 'http://localhost:5173'}${isActive ? '/' : '/about'}`
+    ),
+  });
+};
+
+export const sendOrderCancelledEmailToFarmer = async (farmerEmail, farmerName, orderDetails) => {
+  const { orderId, buyerName, totalAmount } = orderDetails;
+
+  const content = `
+    <h2>❌ Order Cancelled</h2>
+    <p>Dear ${farmerName},</p>
+    <p>Unfortunately, an order has been cancelled by the buyer.</p>
+    <div class="warning-box">
+      <p style="margin: 0;"><strong>Order ID:</strong> #${
+        orderId?.slice(-8)?.toUpperCase() || 'N/A'
+      }</p>
+      <p style="margin: 8px 0 0 0;"><strong>Buyer:</strong> ${buyerName}</p>
+      <p style="margin: 8px 0 0 0;"><strong>Amount:</strong> ৳${totalAmount}</p>
+    </div>
+    <p>The product quantities have been restored to your inventory automatically.</p>
+    <p>You can view more details in your orders dashboard.</p>
+  `;
+
+  return sendEmail({
+    to: farmerEmail,
+    subject: `❌ Order Cancelled - ${orderId?.slice(-8)?.toUpperCase() || 'N/A'}`,
+    html: getEmailTemplate(
+      'Order Cancelled',
+      content,
+      'View Orders',
+      `${process.env.FRONTEND_URL || 'http://localhost:5173'}/farmer/orders`
+    ),
+  });
+};
+
 export default {
   sendEmail,
   sendVerificationApprovedEmail,
@@ -362,4 +455,7 @@ export default {
   sendOrderStatusUpdateEmailToBuyer,
   sendDocumentSubmissionEmailToAdmin,
   sendWelcomeEmail,
+  sendBroadcastEmail,
+  sendAccountStatusEmail,
+  sendOrderCancelledEmailToFarmer,
 };

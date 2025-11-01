@@ -6,6 +6,8 @@ import {
   sendNewOrderEmailToFarmer,
   sendOrderStatusUpdateEmailToBuyer,
   sendDocumentSubmissionEmailToAdmin,
+  sendAccountStatusEmail,
+  sendOrderCancelledEmailToFarmer,
 } from './emailService.js';
 
 /**
@@ -286,6 +288,72 @@ export const notifyAdminNewDocument = async (
   }
 };
 
+// Account status change notification
+export const notifyAccountStatusChange = async (
+  userId,
+  userName,
+  isActive,
+  io = null,
+  connectedUsers = null
+) => {
+  try {
+    const user = await User.findById(userId);
+    if (!user) return;
+
+    // Create in-app notification
+    await createNotification({
+      recipientId: userId,
+      type: 'system',
+      title: `Account ${isActive ? 'Activated' : 'Deactivated'}`,
+      message: `Your account has been ${
+        isActive ? 'activated' : 'deactivated'
+      } by the administrator`,
+      io,
+      connectedUsers,
+    });
+
+    // Send email
+    await sendAccountStatusEmail(user.email, userName, isActive).catch((err) =>
+      console.error('Error sending account status email:', err)
+    );
+  } catch (error) {
+    console.error('Error in notifyAccountStatusChange:', error);
+  }
+};
+
+// Order cancelled notification to farmer
+export const notifyFarmerOrderCancelled = async (
+  farmerId,
+  orderDetails,
+  io = null,
+  connectedUsers = null
+) => {
+  try {
+    const farmer = await User.findById(farmerId);
+    if (!farmer) return;
+
+    const { orderId, buyerName, totalAmount } = orderDetails;
+
+    // Create in-app notification
+    await createNotification({
+      recipientId: farmerId,
+      type: 'order',
+      title: 'Order Cancelled',
+      message: `Order ${orderId} has been cancelled by ${buyerName}`,
+      orderId,
+      io,
+      connectedUsers,
+    });
+
+    // Send email
+    await sendOrderCancelledEmailToFarmer(farmer.email, farmer.name, orderDetails).catch((err) =>
+      console.error('Error sending order cancelled email:', err)
+    );
+  } catch (error) {
+    console.error('Error in notifyFarmerOrderCancelled:', error);
+  }
+};
+
 export default {
   createNotification,
   createBroadcastNotification,
@@ -294,4 +362,6 @@ export default {
   notifyFarmerNewOrder,
   notifyOrderStatusUpdate,
   notifyAdminNewDocument,
+  notifyAccountStatusChange,
+  notifyFarmerOrderCancelled,
 };

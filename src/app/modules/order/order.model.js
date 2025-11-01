@@ -5,7 +5,7 @@ const orderSchema = new mongoose.Schema(
     orderId: {
       type: String,
       unique: true,
-      required: true,
+      // Don't set required: true here since it's auto-generated in pre-save hook
     },
     buyerId: {
       type: mongoose.Schema.Types.ObjectId,

@@ -2,7 +2,11 @@ import Product from '../product/product.model.js';
 import Order from '../order/order.model.js';
 import Notification from '../notification/notification.model.js';
 import ProductSlot from '../product/productSlot.model.js';
-import { notifyFarmerNewOrder } from '../../../utils/notificationHelper.js';
+import User from '../auth/auth.model.js';
+import {
+  notifyFarmerNewOrder,
+  notifyFarmerOrderCancelled,
+} from '../../../utils/notificationHelper.js';
 
 // @desc    Browse all available products (with filters)
 // @route   GET /api/buyer/products
@@ -330,14 +334,25 @@ export const cancelOrder = async (req, res) => {
     order.status = 'cancelled';
     await order.save();
 
-    // Create notification for farmer
-    await Notification.create({
-      recipientId: order.farmerId,
-      type: 'order',
-      title: 'Order Cancelled',
-      message: `Order ${order.orderId} has been cancelled by the buyer`,
-      orderId: order._id,
-    });
+    // Get buyer info
+    const buyer = await User.findById(order.buyerId);
+    const buyerName = buyer ? buyer.name : 'Buyer';
+
+    // Get Socket.IO instance
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+
+    // Send notification and email to farmer
+    await notifyFarmerOrderCancelled(
+      order.farmerId,
+      {
+        orderId: order.orderId,
+        buyerName,
+        totalAmount: order.totalAmount,
+      },
+      io,
+      connectedUsers
+    ).catch((err) => console.error('Error notifying farmer:', err));
 
     res.status(200).json({
       success: true,
