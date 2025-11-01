@@ -9,6 +9,15 @@ import fs from 'fs';
 // @access  Private (Farmer only)
 export const createProduct = async (req, res) => {
   try {
+    // Check if farmer is verified
+    if (req.user.verificationStatus !== 'approved') {
+      return res.status(403).json({
+        success: false,
+        message:
+          'You must be verified by admin before adding products. Please upload your verification documents and wait for approval.',
+      });
+    }
+
     const {
       name,
       category,
@@ -128,6 +137,14 @@ export const getProductById = async (req, res) => {
 // @access  Private (Farmer only)
 export const updateProduct = async (req, res) => {
   try {
+    // Check if farmer is verified
+    if (req.user.verificationStatus !== 'approved') {
+      return res.status(403).json({
+        success: false,
+        message: 'You must be verified by admin before updating products.',
+      });
+    }
+
     let product = await Product.findById(req.params.id);
 
     if (!product) {

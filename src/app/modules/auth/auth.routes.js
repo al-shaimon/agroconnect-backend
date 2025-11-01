@@ -34,10 +34,17 @@ const updateProfileValidation = [
 ];
 
 // Routes
-router.post('/register', registerValidation, validate, register);
+router.post('/register', upload.single('profileImage'), registerValidation, validate, register);
 router.post('/login', loginValidation, validate, login);
 router.get('/me', protect, getMe);
-router.put('/profile', protect, updateProfileValidation, validate, updateProfile);
+router.put(
+  '/profile',
+  protect,
+  upload.single('profileImage'),
+  updateProfileValidation,
+  validate,
+  updateProfile
+);
 router.post(
   '/upload-verification',
   protect,

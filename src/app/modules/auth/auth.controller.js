@@ -20,6 +20,10 @@ export const register = async (req, res) => {
 
     // Validate role
     if (!['farmer', 'buyer'].includes(role)) {
+      // Clean up uploaded file if validation fails
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(400).json({
         success: false,
         message: 'Invalid role. Must be either farmer or buyer',
@@ -30,10 +34,44 @@ export const register = async (req, res) => {
     const userExists = await User.findOne({ email });
 
     if (userExists) {
+      // Clean up uploaded file if user exists
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(400).json({
         success: false,
         message: 'User already exists with this email',
       });
+    }
+
+    // Handle profile image upload if provided
+    let profileImageUrl = null;
+    let profileImagePublicId = null;
+
+    if (req.file) {
+      try {
+        const result = await uploadToCloudinary(
+          req.file.path,
+          `agroconnect/profiles/${role}`,
+          role,
+          null,
+          null
+        );
+        profileImageUrl = result.secure_url;
+        profileImagePublicId = result.public_id;
+
+        // Delete local file
+        fs.unlinkSync(req.file.path);
+      } catch (uploadError) {
+        // Delete local file on error
+        if (req.file) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload profile image',
+        });
+      }
     }
 
     // Create user
@@ -44,6 +82,8 @@ export const register = async (req, res) => {
       phone,
       role,
       location,
+      profileImage: profileImageUrl,
+      profileImagePublicId: profileImagePublicId,
     });
 
     if (user) {
@@ -57,6 +97,7 @@ export const register = async (req, res) => {
           phone: user.phone,
           role: user.role,
           location: user.location,
+          profileImage: user.profileImage,
           isVerified: user.isVerified,
           verificationStatus: user.verificationStatus || 'pending',
           verificationDocuments: user.verificationDocuments || [],
@@ -67,6 +108,10 @@ export const register = async (req, res) => {
       });
     }
   } catch (error) {
+    // Clean up uploaded file on error
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({
       success: false,
       message: error.message,
@@ -119,6 +164,7 @@ export const login = async (req, res) => {
         phone: user.phone,
         role: user.role,
         location: user.location,
+        profileImage: user.profileImage,
         isVerified: user.isVerified,
         verificationStatus: user.verificationStatus || 'pending',
         verificationDocuments: user.verificationDocuments || [],
@@ -151,6 +197,7 @@ export const getMe = async (req, res) => {
         phone: user.phone,
         role: user.role,
         location: user.location,
+        profileImage: user.profileImage,
         isVerified: user.isVerified,
         verificationStatus: user.verificationStatus || 'pending',
         verificationDocuments: user.verificationDocuments || [],
@@ -174,10 +221,47 @@ export const updateProfile = async (req, res) => {
     const user = await User.findById(req.user._id);
 
     if (!user) {
+      // Clean up uploaded file if user not found
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(404).json({
         success: false,
         message: 'User not found',
       });
+    }
+
+    // Handle profile image upload if provided
+    if (req.file) {
+      try {
+        // Delete old profile image from Cloudinary if exists
+        if (user.profileImagePublicId) {
+          await deleteFromCloudinary(user.profileImagePublicId);
+        }
+
+        // Upload new profile image
+        const result = await uploadToCloudinary(
+          req.file.path,
+          `agroconnect/profiles/${user.role}`,
+          user.role,
+          null,
+          null
+        );
+        user.profileImage = result.secure_url;
+        user.profileImagePublicId = result.public_id;
+
+        // Delete local file
+        fs.unlinkSync(req.file.path);
+      } catch (uploadError) {
+        // Delete local file on error
+        if (req.file) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload profile image',
+        });
+      }
     }
 
     // Update allowed fields
@@ -215,6 +299,7 @@ export const updateProfile = async (req, res) => {
         phone: updatedUser.phone,
         role: updatedUser.role,
         location: updatedUser.location,
+        profileImage: updatedUser.profileImage,
         isVerified: updatedUser.isVerified,
         verificationStatus: updatedUser.verificationStatus,
         verificationDocuments: updatedUser.verificationDocuments,
@@ -224,6 +309,10 @@ export const updateProfile = async (req, res) => {
       },
     });
   } catch (error) {
+    // Clean up uploaded file on error
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({
       success: false,
       message: error.message,
