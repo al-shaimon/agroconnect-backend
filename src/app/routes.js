@@ -8,6 +8,7 @@ import notificationRoutes from './modules/notification/notification.routes.js';
 import publicRoutes from './modules/public/public.routes.js';
 import reviewRoutes from './modules/review/review.routes.js';
 import productRoutes from './modules/product/product.routes.js';
+import driverRoutes from './modules/driver/driver.routes.js';
 import * as buyerProductController from './modules/product/buyerProduct.controller.js';
 
 const router = express.Router();
@@ -23,6 +24,7 @@ router.get('/buyer/categories', buyerProductController.getCategories);
 router.use('/auth', authRoutes);
 router.use('/farmer', farmerRoutes);
 router.use('/buyer', buyerRoutes); // Now only has orders and stats (protected)
+router.use('/driver', driverRoutes);
 router.use('/admin', adminRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/public', publicRoutes);

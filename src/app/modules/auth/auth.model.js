@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['farmer', 'buyer', 'admin'],
+      enum: ['farmer', 'buyer', 'admin', 'driver'],
       required: [true, 'Please specify a role'],
     },
     location: {
@@ -87,11 +87,80 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Driver-specific fields
+    driverType: {
+      type: String,
+      enum: ['professional', 'volunteer'],
+    },
+    vehicleInfo: {
+      vehicleType: {
+        type: String,
+        enum: ['bike', 'bicycle', 'car', 'van', 'truck'],
+      },
+      vehicleModel: {
+        type: String,
+        trim: true,
+      },
+      vehicleNumber: {
+        type: String,
+        trim: true,
+        // Optional for bicycle, as bicycles don't have vehicle numbers
+        required: function () {
+          return this.vehicleInfo?.vehicleType !== 'bicycle';
+        },
+      },
+      hasFreezer: {
+        type: Boolean,
+        default: false,
+      },
+      vehicleImage: {
+        type: String,
+        trim: true,
+      },
+      vehicleImagePublicId: {
+        type: String,
+        trim: true,
+      },
+    },
+    // Driver availability and location
+    isAvailable: {
+      type: Boolean,
+      default: true,
+    },
+    currentLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        default: [0, 0],
+      },
+    },
+    // Driver statistics
+    completedDeliveries: {
+      type: Number,
+      default: 0,
+    },
+    rating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+    totalRatings: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+// Create geospatial index for driver location
+userSchema.index({ currentLocation: '2dsphere' });
 
 // Hash password before saving
 userSchema.pre('save', async function (next) {

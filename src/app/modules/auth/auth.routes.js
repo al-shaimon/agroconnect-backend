@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   register,
+  registerDriver,
   login,
   getMe,
   updateProfile,
@@ -35,6 +36,18 @@ const updateProfileValidation = [
 
 // Routes
 router.post('/register', upload.single('profileImage'), registerValidation, validate, register);
+router.post(
+  '/register-driver',
+  upload.fields([
+    { name: 'profileImage', maxCount: 1 },
+    { name: 'vehicleImage', maxCount: 1 },
+    { name: 'drivingLicense', maxCount: 1 },
+    { name: 'nidFront', maxCount: 1 },
+    { name: 'nidBack', maxCount: 1 },
+    { name: 'passport', maxCount: 1 },
+  ]),
+  registerDriver
+);
 router.post('/login', loginValidation, validate, login);
 router.get('/me', protect, getMe);
 router.put(

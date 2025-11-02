@@ -11,7 +11,7 @@ export const getPendingVerifications = async (req, res) => {
   try {
     const pendingUsers = await User.find({
       verificationStatus: 'pending',
-      role: { $in: ['farmer', 'buyer'] },
+      role: { $in: ['farmer', 'buyer', 'driver'] },
     }).select('-password');
 
     res.status(200).json({
@@ -34,7 +34,7 @@ export const getAllVerifications = async (req, res) => {
   try {
     const { status, role, page = 1, limit = 10 } = req.query;
 
-    const query = { role: { $in: ['farmer', 'buyer'] } };
+    const query = { role: { $in: ['farmer', 'buyer', 'driver'] } };
 
     if (status) {
       query.verificationStatus = status;
@@ -212,7 +212,7 @@ export const getVerificationStats = async (req, res) => {
     const stats = await User.aggregate([
       {
         $match: {
-          role: { $in: ['farmer', 'buyer'] },
+          role: { $in: ['farmer', 'buyer', 'driver'] },
         },
       },
       {
@@ -226,7 +226,7 @@ export const getVerificationStats = async (req, res) => {
     const roleStats = await User.aggregate([
       {
         $match: {
-          role: { $in: ['farmer', 'buyer'] },
+          role: { $in: ['farmer', 'buyer', 'driver'] },
         },
       },
       {
@@ -257,6 +257,7 @@ export const getVerificationStats = async (req, res) => {
     const roleBreakdown = {
       farmer: { pending: 0, approved: 0, rejected: 0 },
       buyer: { pending: 0, approved: 0, rejected: 0 },
+      driver: { pending: 0, approved: 0, rejected: 0 },
     };
 
     roleStats.forEach((stat) => {

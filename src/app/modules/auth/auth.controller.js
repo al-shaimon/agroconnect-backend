@@ -572,3 +572,334 @@ export const deleteVerificationDocument = async (req, res) => {
     });
   }
 };
+
+// @desc    Register new driver with documents and vehicle info
+// @route   POST /api/auth/register-driver
+// @access  Public
+export const registerDriver = async (req, res) => {
+  try {
+    const { name, email, password, phone, location, vehicleInfo, driverType } = req.body;
+
+    // Check if user exists
+    const userExists = await User.findOne({ email });
+
+    if (userExists) {
+      // Clean up uploaded files if user exists
+      if (req.files) {
+        Object.values(req.files).forEach((fileArray) => {
+          fileArray.forEach((file) => cleanupFile(file));
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'User already exists with this email',
+      });
+    }
+
+    // Validate driver type
+    if (!driverType || !['professional', 'volunteer'].includes(driverType)) {
+      if (req.files) {
+        Object.values(req.files).forEach((fileArray) => {
+          fileArray.forEach((file) => cleanupFile(file));
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Please specify driver type (professional or volunteer)',
+      });
+    }
+
+    // Parse vehicleInfo if it's a string
+    let parsedVehicleInfo = vehicleInfo;
+    if (typeof vehicleInfo === 'string') {
+      try {
+        parsedVehicleInfo = JSON.parse(vehicleInfo);
+      } catch (e) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid vehicle info format',
+        });
+      }
+    }
+
+    // Handle profile image upload
+    let profileImageUrl = null;
+    let profileImagePublicId = null;
+
+    if (req.files && req.files.profileImage && req.files.profileImage[0]) {
+      try {
+        const result = await handleFileUpload(
+          req.files.profileImage[0],
+          'agroconnect/profiles/driver',
+          'driver',
+          null,
+          'profile'
+        );
+
+        if (result) {
+          profileImageUrl = result.secure_url;
+          profileImagePublicId = result.public_id;
+        }
+      } catch (uploadError) {
+        if (req.files) {
+          Object.values(req.files).forEach((fileArray) => {
+            fileArray.forEach((file) => cleanupFile(file));
+          });
+        }
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload profile image',
+        });
+      }
+    } else {
+      // Profile image is mandatory
+      if (req.files) {
+        Object.values(req.files).forEach((fileArray) => {
+          fileArray.forEach((file) => cleanupFile(file));
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Profile image is required',
+      });
+    }
+
+    // Handle vehicle image upload
+    let vehicleImageUrl = null;
+    let vehicleImagePublicId = null;
+
+    if (req.files && req.files.vehicleImage && req.files.vehicleImage[0]) {
+      try {
+        const result = await handleFileUpload(
+          req.files.vehicleImage[0],
+          'agroconnect/vehicles',
+          'driver',
+          null,
+          'vehicle'
+        );
+
+        if (result) {
+          vehicleImageUrl = result.secure_url;
+          vehicleImagePublicId = result.public_id;
+        }
+      } catch (uploadError) {
+        if (req.files) {
+          Object.values(req.files).forEach((fileArray) => {
+            fileArray.forEach((file) => cleanupFile(file));
+          });
+        }
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload vehicle image',
+        });
+      }
+    }
+
+    // Handle verification documents upload
+    const verificationDocuments = [];
+
+    // Check if vehicle type is bicycle
+    const isBicycle = parsedVehicleInfo?.vehicleType === 'bicycle';
+
+    // Handle driving license (mandatory only if not bicycle)
+    if (req.files && req.files.drivingLicense && req.files.drivingLicense[0]) {
+      try {
+        const result = await handleFileUpload(
+          req.files.drivingLicense[0],
+          'agroconnect/verification/driver',
+          'driver',
+          null,
+          'driving_license'
+        );
+
+        if (result) {
+          verificationDocuments.push({
+            documentType: 'driving_license',
+            documentNumber: req.body.drivingLicenseNumber || '',
+            documentUrl: result.secure_url,
+            cloudinaryPublicId: result.public_id,
+            cloudinaryResourceType: result.resource_type,
+          });
+        }
+      } catch (uploadError) {
+        if (req.files) {
+          Object.values(req.files).forEach((fileArray) => {
+            fileArray.forEach((file) => cleanupFile(file));
+          });
+        }
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload driving license',
+        });
+      }
+    } else if (!isBicycle) {
+      // Driving license is required only if not bicycle
+      if (req.files) {
+        Object.values(req.files).forEach((fileArray) => {
+          fileArray.forEach((file) => cleanupFile(file));
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Driving license is required for non-bicycle vehicles',
+      });
+    }
+
+    // Handle NID (if provided)
+    if (req.files && req.files.nidFront && req.files.nidFront[0]) {
+      try {
+        let nidUrls = [];
+        let nidPublicIds = [];
+
+        // Front side
+        const frontResult = await handleFileUpload(
+          req.files.nidFront[0],
+          'agroconnect/verification/driver',
+          'driver',
+          null,
+          'nid'
+        );
+        nidUrls.push(frontResult.secure_url);
+        nidPublicIds.push(frontResult.public_id);
+
+        // Back side (if provided)
+        if (req.files.nidBack && req.files.nidBack[0]) {
+          const backResult = await handleFileUpload(
+            req.files.nidBack[0],
+            'agroconnect/verification/driver',
+            'driver',
+            null,
+            'nid'
+          );
+          nidUrls.push(backResult.secure_url);
+          nidPublicIds.push(backResult.public_id);
+        }
+
+        verificationDocuments.push({
+          documentType: 'nid',
+          documentNumber: req.body.nidNumber || '',
+          documentUrl: nidUrls.join('|||'),
+          cloudinaryPublicId: nidPublicIds.join('|||'),
+          cloudinaryResourceType: 'image',
+        });
+      } catch (uploadError) {
+        if (req.files) {
+          Object.values(req.files).forEach((fileArray) => {
+            fileArray.forEach((file) => cleanupFile(file));
+          });
+        }
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload NID',
+        });
+      }
+    }
+
+    // Handle Passport (if provided) - OPTIONAL, NOT REQUIRED
+    if (req.files && req.files.passport && req.files.passport[0]) {
+      try {
+        const result = await handleFileUpload(
+          req.files.passport[0],
+          'agroconnect/verification/driver',
+          'driver',
+          null,
+          'passport'
+        );
+
+        verificationDocuments.push({
+          documentType: 'passport',
+          documentNumber: req.body.passportNumber || '',
+          documentUrl: result.secure_url,
+          cloudinaryPublicId: result.public_id,
+          cloudinaryResourceType: result.resource_type,
+        });
+      } catch (uploadError) {
+        if (req.files) {
+          Object.values(req.files).forEach((fileArray) => {
+            fileArray.forEach((file) => cleanupFile(file));
+          });
+        }
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload passport',
+        });
+      }
+    }
+
+    // Validation for documents
+    // For bicycle: No documents required (NID optional but recommended)
+    // For other vehicles: Driving license is mandatory, NID is optional but recommended
+    if (!isBicycle && verificationDocuments.length < 1) {
+      if (req.files) {
+        Object.values(req.files).forEach((fileArray) => {
+          fileArray.forEach((file) => cleanupFile(file));
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide driving license (NID is recommended but optional)',
+      });
+    }
+
+    // Create driver user
+    const driver = await User.create({
+      name,
+      email,
+      password,
+      phone,
+      role: 'driver',
+      driverType,
+      location,
+      profileImage: profileImageUrl,
+      profileImagePublicId: profileImagePublicId,
+      vehicleInfo: {
+        ...parsedVehicleInfo,
+        vehicleImage: vehicleImageUrl,
+        vehicleImagePublicId: vehicleImagePublicId,
+      },
+      verificationDocuments,
+      verificationStatus: 'pending',
+      isVerified: false,
+      isAvailable: false, // Driver starts as unavailable until verified
+    });
+
+    // Notify admin about new driver registration
+    await notifyAdminNewDocument(driver._id, 'driver');
+
+    if (driver) {
+      res.status(201).json({
+        success: true,
+        message:
+          'Driver registered successfully. Your documents are under review. You will be notified once verified.',
+        data: {
+          _id: driver._id,
+          name: driver.name,
+          email: driver.email,
+          phone: driver.phone,
+          role: driver.role,
+          location: driver.location,
+          vehicleInfo: driver.vehicleInfo,
+          isVerified: driver.isVerified,
+          verificationStatus: driver.verificationStatus,
+          verificationDocuments: driver.verificationDocuments,
+          isActive: driver.isActive,
+          createdAt: driver.createdAt,
+          token: generateToken(driver._id),
+        },
+      });
+    }
+  } catch (error) {
+    // Clean up all uploaded files on error
+    if (req.files) {
+      Object.values(req.files).forEach((fileArray) => {
+        fileArray.forEach((file) => cleanupFile(file));
+      });
+    }
+
+    console.error('Driver registration error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Server error during driver registration',
+    });
+  }
+};
