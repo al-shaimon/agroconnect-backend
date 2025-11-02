@@ -149,9 +149,7 @@ export const register = async (req, res) => {
     }
   } catch (error) {
     // Clean up uploaded file on error
-    if (req.file) {
-      fs.unlinkSync(req.file.path);
-    }
+    cleanupFile(req.file);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -346,9 +344,7 @@ export const updateProfile = async (req, res) => {
     });
   } catch (error) {
     // Clean up uploaded file on error
-    if (req.file) {
-      fs.unlinkSync(req.file.path);
-    }
+    cleanupFile(req.file);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -478,9 +474,7 @@ export const uploadVerificationDocument = async (req, res) => {
     // Delete local files if error occurs
     if (req.files && req.files.length > 0) {
       req.files.forEach((file) => {
-        if (file.path && fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
-        }
+        cleanupFile(file);
       });
     }
 
