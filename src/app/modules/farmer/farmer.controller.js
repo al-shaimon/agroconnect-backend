@@ -302,6 +302,22 @@ export const getFarmerOrders = async (req, res) => {
       .populate('buyerId', 'name email phone location')
       .sort({ createdAt: -1 });
 
+    // Migrate old paymentStatus values
+    let needsSave = false;
+    for (const order of orders) {
+      if (order.paymentStatus === 'paid') {
+        order.paymentStatus = 'verified';
+        needsSave = true;
+      } else if (order.paymentStatus === 'unpaid') {
+        order.paymentStatus = 'pending';
+        needsSave = true;
+      }
+      if (needsSave) {
+        await order.save();
+        needsSave = false;
+      }
+    }
+
     res.status(200).json({
       success: true,
       count: orders.length,
@@ -329,7 +345,7 @@ export const updateOrderStatus = async (req, res) => {
       });
     }
 
-    const validStatuses = ['pending', 'confirmed', 'in-transit', 'delivered', 'cancelled'];
+    const validStatuses = ['processing', 'confirmed', 'in-transit', 'delivered', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -357,13 +373,23 @@ export const updateOrderStatus = async (req, res) => {
     const previousStatus = order.status;
     order.status = status;
 
+    // Migrate old paymentStatus values to new enum
+    if (order.paymentStatus === 'paid') {
+      order.paymentStatus = 'verified';
+    } else if (order.paymentStatus === 'unpaid') {
+      order.paymentStatus = 'pending';
+    }
+
     // Set delivery date if status is delivered
     if (status === 'delivered') {
       order.deliveryDate = new Date();
     }
 
     // Restore stock if farmer cancels/rejects the order
-    if (status === 'cancelled' && previousStatus === 'pending') {
+    if (
+      status === 'cancelled' &&
+      (previousStatus === 'processing' || previousStatus === 'confirmed')
+    ) {
       // Restore product quantities
       for (const item of order.items) {
         const product = await FarmerProduct.findById(item.productId);
@@ -403,6 +429,106 @@ export const updateOrderStatus = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Order status updated successfully',
+      data: order,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Verify payment for an order
+// @route   PUT /api/farmer/orders/:id/verify-payment
+// @access  Private (Farmer only)
+export const verifyPayment = async (req, res) => {
+  try {
+    const { action } = req.body; // 'verify' or 'reject'
+
+    if (!action || !['verify', 'reject'].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid action (verify or reject)',
+      });
+    }
+
+    let order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found',
+      });
+    }
+
+    // Check if order belongs to the logged-in farmer
+    if (order.farmerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to verify this order',
+      });
+    }
+
+    // Migrate old paymentStatus values
+    if (order.paymentStatus === 'paid') {
+      order.paymentStatus = 'verified';
+    } else if (order.paymentStatus === 'unpaid') {
+      order.paymentStatus = 'pending';
+    }
+
+    if (order.paymentStatus !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment has already been verified or rejected',
+      });
+    }
+
+    if (action === 'verify') {
+      order.paymentStatus = 'verified';
+      order.status = 'confirmed';
+    } else {
+      order.paymentStatus = 'rejected';
+      order.status = 'cancelled';
+
+      // Restore product quantities if payment is rejected
+      for (const item of order.items) {
+        const product = await FarmerProduct.findById(item.productId);
+        if (product) {
+          product.availableQuantity += item.quantity;
+
+          if (!product.isAvailable && product.availableQuantity > 0) {
+            product.isAvailable = true;
+          }
+
+          await product.save();
+        }
+      }
+    }
+
+    await order.save();
+
+    // Get farmer name for notification
+    const farmer = await User.findById(order.farmerId);
+    const farmerName = farmer ? farmer.name : 'the farmer';
+
+    // Get Socket.IO instance and connected users
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+
+    // Send notification to buyer
+    await notifyOrderStatusUpdate(
+      order.buyerId,
+      order._id,
+      action === 'verify' ? 'confirmed' : 'cancelled',
+      farmerName,
+      io,
+      connectedUsers
+    ).catch((err) => console.error('Error notifying buyer:', err));
+
+    res.status(200).json({
+      success: true,
+      message: action === 'verify' ? 'Payment verified successfully' : 'Payment rejected',
       data: order,
     });
   } catch (error) {

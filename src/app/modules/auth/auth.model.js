@@ -104,9 +104,9 @@ const userSchema = new mongoose.Schema(
       vehicleNumber: {
         type: String,
         trim: true,
-        // Optional for bicycle, as bicycles don't have vehicle numbers
+        // Only required for drivers and when vehicle is not a bicycle
         required: function () {
-          return this.vehicleInfo?.vehicleType !== 'bicycle';
+          return this.role === 'driver' && this.vehicleInfo?.vehicleType !== 'bicycle';
         },
       },
       hasFreezer: {

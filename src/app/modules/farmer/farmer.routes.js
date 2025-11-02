@@ -7,6 +7,7 @@ import {
   deleteProduct,
   getFarmerOrders,
   updateOrderStatus,
+  verifyPayment,
   getFarmerStats,
   getRevenueAnalytics,
 } from './farmer.controller.js';
@@ -53,6 +54,7 @@ router
 // Order routes
 router.get('/orders', getFarmerOrders);
 router.put('/orders/:id/status', orderStatusValidation, validate, updateOrderStatus);
+router.put('/orders/:id/verify-payment', verifyPayment);
 
 // Stats route
 router.get('/stats', getFarmerStats);

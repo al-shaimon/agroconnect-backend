@@ -12,12 +12,20 @@ import {
 // @access  Private (Buyer only)
 export const placeOrder = async (req, res) => {
   try {
-    const { items, deliveryAddress, notes } = req.body;
+    const { items, deliveryAddress, notes, paymentDetails } = req.body;
 
     if (!items || items.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Please provide order items',
+      });
+    }
+
+    // Validate payment details
+    if (!paymentDetails || !paymentDetails.bkashNumber || !paymentDetails.transactionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment details (bKash number and transaction ID) are required',
       });
     }
 
@@ -94,7 +102,8 @@ export const placeOrder = async (req, res) => {
       await farmerProduct.save();
     }
 
-    // Create order
+    // Create order with processing status and pending payment verification
+    // Farmer needs to verify the bKash payment before confirming
     const order = await Order.create({
       buyerId: req.user._id,
       farmerId,
@@ -102,6 +111,12 @@ export const placeOrder = async (req, res) => {
       totalAmount,
       deliveryAddress,
       notes,
+      status: 'processing',
+      paymentStatus: 'pending',
+      paymentDetails: {
+        bkashNumber: paymentDetails.bkashNumber,
+        transactionId: paymentDetails.transactionId,
+      },
     });
 
     // Populate order for notification

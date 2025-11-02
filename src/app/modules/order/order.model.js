@@ -61,8 +61,8 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'confirmed', 'in-transit', 'delivered', 'cancelled'],
-      default: 'pending',
+      enum: ['processing', 'confirmed', 'in-transit', 'delivered', 'cancelled'],
+      default: 'processing',
     },
     deliveryAddress: {
       area: {
@@ -79,8 +79,18 @@ const orderSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ['unpaid', 'paid'],
-      default: 'unpaid',
+      enum: ['pending', 'verified', 'rejected'],
+      default: 'pending',
+    },
+    paymentDetails: {
+      bkashNumber: {
+        type: String,
+        trim: true,
+      },
+      transactionId: {
+        type: String,
+        trim: true,
+      },
     },
     orderDate: {
       type: Date,
