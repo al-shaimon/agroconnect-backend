@@ -354,11 +354,30 @@ export const updateOrderStatus = async (req, res) => {
       });
     }
 
+    const previousStatus = order.status;
     order.status = status;
 
     // Set delivery date if status is delivered
     if (status === 'delivered') {
       order.deliveryDate = new Date();
+    }
+
+    // Restore stock if farmer cancels/rejects the order
+    if (status === 'cancelled' && previousStatus === 'pending') {
+      // Restore product quantities
+      for (const item of order.items) {
+        const product = await FarmerProduct.findById(item.productId);
+        if (product) {
+          product.availableQuantity += item.quantity;
+
+          // Make product available again if it was unavailable due to stock
+          if (!product.isAvailable && product.availableQuantity > 0) {
+            product.isAvailable = true;
+          }
+
+          await product.save();
+        }
+      }
     }
 
     await order.save();

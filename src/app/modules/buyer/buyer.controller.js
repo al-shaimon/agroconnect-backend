@@ -237,10 +237,15 @@ export const cancelOrder = async (req, res) => {
 
     // Restore product quantities
     for (const item of order.items) {
-      const product = await Product.findById(item.productId);
+      const product = await FarmerProduct.findById(item.productId);
       if (product) {
         product.availableQuantity += item.quantity;
-        product.isAvailable = true;
+
+        // Make product available again if it was unavailable due to stock
+        if (!product.isAvailable && product.availableQuantity > 0) {
+          product.isAvailable = true;
+        }
+
         await product.save();
       }
     }
