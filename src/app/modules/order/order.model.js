@@ -111,19 +111,50 @@ const orderSchema = new mongoose.Schema(
 
 // Auto-generate orderId before saving
 orderSchema.pre('save', async function (next) {
-  if (this.isNew) {
-    const date = new Date();
-    const dateString = date.toISOString().split('T')[0].replace(/-/g, '');
+  if (this.isNew && !this.orderId) {
+    try {
+      // Get current date in Bangladesh timezone
+      const bdDate = new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' });
+      const date = new Date(bdDate);
+      const dateString = date.toISOString().split('T')[0].replace(/-/g, '');
 
-    // Find the count of orders created today
-    const count = await mongoose.model('Order').countDocuments({
-      createdAt: {
-        $gte: new Date(date.setHours(0, 0, 0, 0)),
-        $lt: new Date(date.setHours(23, 59, 59, 999)),
-      },
-    });
+      // Get the start and end of today in Bangladesh timezone
+      const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+      const endOfDay = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        23,
+        59,
+        59,
+        999
+      );
 
-    this.orderId = `ORD-${dateString}-${String(count + 1).padStart(3, '0')}`;
+      // Find the latest order for today and increment
+      const latestOrder = await mongoose
+        .model('Order')
+        .findOne({
+          createdAt: {
+            $gte: startOfDay,
+            $lte: endOfDay,
+          },
+        })
+        .sort({ createdAt: -1 })
+        .select('orderId');
+
+      let orderNumber = 1;
+      if (latestOrder && latestOrder.orderId) {
+        // Extract the number from the last orderId (e.g., "ORD-20251102-013" -> 13)
+        const lastNumber = parseInt(latestOrder.orderId.split('-')[2]);
+        orderNumber = lastNumber + 1;
+      }
+
+      this.orderId = `ORD-${dateString}-${String(orderNumber).padStart(3, '0')}`;
+    } catch (error) {
+      console.error('Error generating orderId:', error);
+      // Fallback to timestamp-based ID if there's an error
+      this.orderId = `ORD-${Date.now()}`;
+    }
   }
   next();
 });
